@@ -1,0 +1,742 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QueryAnswer",
+  "description": "responses to queries",
+  "anyOf": [
+    {
+      "description": "response listing the current admin addresses",
+      "type": "object",
+      "required": [
+        "admins"
+      ],
+      "properties": {
+        "admins": {
+          "type": "object",
+          "required": [
+            "admins"
+          ],
+          "properties": {
+            "admins": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "displays the info of one template",
+      "type": "object",
+      "required": [
+        "template"
+      ],
+      "properties": {
+        "template": {
+          "type": "object",
+          "required": [
+            "template"
+          ],
+          "properties": {
+            "template": {
+              "$ref": "#/definitions/TemplateInfo"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "displays info of all templates",
+      "type": "object",
+      "required": [
+        "all_templates"
+      ],
+      "properties": {
+        "all_templates": {
+          "type": "object",
+          "required": [
+            "template_count",
+            "templates"
+          ],
+          "properties": {
+            "template_count": {
+              "description": "number of templates in this minter",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "templates": {
+              "description": "template infos",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TemplateInfo"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "displays all the nft contracts this minter uses",
+      "type": "object",
+      "required": [
+        "all_nft_contracts"
+      ],
+      "properties": {
+        "all_nft_contracts": {
+          "type": "object",
+          "required": [
+            "contract_count",
+            "nft_contracts"
+          ],
+          "properties": {
+            "contract_count": {
+              "description": "number of nft contracts this minter uses",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "nft_contracts": {
+              "description": "contract infos",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ContractInfo"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "display the public info of the next tokens that templates will mint",
+      "type": "object",
+      "required": [
+        "public_description_of_nfts"
+      ],
+      "properties": {
+        "public_description_of_nfts": {
+          "type": "object",
+          "required": [
+            "count",
+            "nft_infos"
+          ],
+          "properties": {
+            "count": {
+              "description": "template count (either number of names specified in the input or if no names were specified, the total template count of the contract)",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "nft_infos": {
+              "description": "list of public descriptions",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/PublicDescription"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "display the public info of the next token to be minted from a specified option ID (template)",
+      "type": "object",
+      "required": [
+        "nft_listing_display"
+      ],
+      "properties": {
+        "nft_listing_display": {
+          "type": "object",
+          "required": [
+            "mintable",
+            "nft_contract_address",
+            "nft_info"
+          ],
+          "properties": {
+            "mintable": {
+              "description": "true if this minting option can mint one more nft",
+              "type": "boolean"
+            },
+            "nft_contract_address": {
+              "description": "nft contract address that will contain this token,",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/HumanAddr"
+                }
+              ]
+            },
+            "nft_info": {
+              "description": "the nft fields of interest",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/NftDossierForListing"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "Authentication": {
+      "description": "media file authentication",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "either a decryption key for encrypted files or a password for basic authentication",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "user": {
+          "description": "username used in basic authentication",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ContractInfo": {
+      "description": "code hash and address of a secret contract",
+      "type": "object",
+      "required": [
+        "address",
+        "code_hash"
+      ],
+      "properties": {
+        "address": {
+          "description": "contract's address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          ]
+        },
+        "code_hash": {
+          "description": "contract's code hash string",
+          "type": "string"
+        }
+      }
+    },
+    "DisplayRoyalty": {
+      "description": "display for a single royalty",
+      "type": "object",
+      "required": [
+        "rate"
+      ],
+      "properties": {
+        "rate": {
+          "description": "royalty rate",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "recipient": {
+          "description": "address to send royalties to.  Can be None to keep addresses private",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "DisplayRoyaltyInfo": {
+      "description": "display all royalty information",
+      "type": "object",
+      "required": [
+        "decimal_places_in_rates",
+        "royalties"
+      ],
+      "properties": {
+        "decimal_places_in_rates": {
+          "description": "decimal places in royalty rates",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "royalties": {
+          "description": "list of royalties",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DisplayRoyalty"
+          }
+        }
+      }
+    },
+    "Extension": {
+      "description": "metadata extension You can add any metadata fields you need here.  These fields are based on https://docs.opensea.io/docs/metadata-standards and are the metadata fields that Stashh uses for robust NFT display.  Urls should be prefixed with `http://`, `https://`, `ipfs://`, or `ar://`",
+      "type": "object",
+      "properties": {
+        "animation_url": {
+          "description": "url to a multimedia attachment",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "attributes": {
+          "description": "item attributes",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Trait"
+          }
+        },
+        "background_color": {
+          "description": "background color represented as a six-character hexadecimal without a pre-pended #",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "description": "item description",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "external_url": {
+          "description": "url to allow users to view the item on your site",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "image": {
+          "description": "url to the image",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "image_data": {
+          "description": "raw SVG image data (not recommended). Only use this if you're not including the image parameter",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "media": {
+          "description": "media files as specified on Stashh that allows for basic authenticatiion and decryption keys. Most of the above is used for bridging public eth NFT metadata easily, whereas `media` will be used when minting NFTs on Stashh",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/MediaFile"
+          }
+        },
+        "name": {
+          "description": "name of the item",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "protected_attributes": {
+          "description": "list of attributes whose types are public but whose values are private",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "youtube_url": {
+          "description": "url to a YouTube video",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "HumanAddr": {
+      "type": "string"
+    },
+    "MediaFile": {
+      "description": "media file",
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "authentication": {
+          "description": "authentication information",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Authentication"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extension": {
+          "description": "file extension",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_type": {
+          "description": "file type Stashh currently uses: \"image\", \"video\", \"audio\", \"text\", \"font\", \"application\"",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "description": "url to the file.  Urls should be prefixed with `http://`, `https://`, `ipfs://`, or `ar://`",
+          "type": "string"
+        }
+      }
+    },
+    "Metadata": {
+      "description": "token metadata",
+      "type": "object",
+      "properties": {
+        "extension": {
+          "description": "optional on-chain metadata",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Extension"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "token_uri": {
+          "description": "optional uri for off-chain metadata.  This should be prefixed with `http://`, `https://`, `ipfs://`, or `ar://`",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "MintRunInfo": {
+      "description": "information about the minting of the NFT",
+      "type": "object",
+      "required": [
+        "mint_run",
+        "serial_number",
+        "token_creator"
+      ],
+      "properties": {
+        "collection_creator": {
+          "description": "optional address of the SNIP-721 contract creator",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mint_run": {
+          "description": "number of the mint run this token was minted in.  This is used to serialize identical NFTs",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "quantity_minted_this_run": {
+          "description": "optional total number of NFTs minted on this run.  This is used to represent that this token is number m of n",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "serial_number": {
+          "description": "serial number in this mint run.  This is used to serialize identical NFTs",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "time_of_minting": {
+          "description": "optional time of minting (in seconds since 01/01/1970)",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "token_creator": {
+          "description": "address of this minting contract as the NFT's creator",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          ]
+        }
+      }
+    },
+    "NftDossierForListing": {
+      "description": "NftDossier info stripped down to the listing contract's fields of interest",
+      "type": "object",
+      "required": [
+        "mint_run_info"
+      ],
+      "properties": {
+        "mint_run_info": {
+          "description": "mint run information for this token",
+          "allOf": [
+            {
+              "$ref": "#/definitions/MintRunInfo"
+            }
+          ]
+        },
+        "public_metadata": {
+          "description": "optional public metadata that can be seen by everyone",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Metadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "royalty_info": {
+          "description": "optional royalty information for this token",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DisplayRoyaltyInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "PublicDescription": {
+      "description": "Public description of next minted nft",
+      "type": "object",
+      "required": [
+        "mintable",
+        "nft_contract_address",
+        "nft_info",
+        "template_name"
+      ],
+      "properties": {
+        "mintable": {
+          "description": "true if this template can mint one more nft",
+          "type": "boolean"
+        },
+        "nft_contract_address": {
+          "description": "nft contract address that will contain this token,",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          ]
+        },
+        "nft_info": {
+          "description": "the nft fields of interest",
+          "allOf": [
+            {
+              "$ref": "#/definitions/NftDossierForListing"
+            }
+          ]
+        },
+        "template_name": {
+          "description": "the template that will mint this nft",
+          "type": "string"
+        }
+      }
+    },
+    "Royalty": {
+      "description": "data for a single royalty",
+      "type": "object",
+      "required": [
+        "rate",
+        "recipient"
+      ],
+      "properties": {
+        "rate": {
+          "description": "royalty rate",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "recipient": {
+          "description": "address to send royalties to",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          ]
+        }
+      }
+    },
+    "RoyaltyInfo": {
+      "description": "all royalty information",
+      "type": "object",
+      "required": [
+        "decimal_places_in_rates",
+        "royalties"
+      ],
+      "properties": {
+        "decimal_places_in_rates": {
+          "description": "decimal places in royalty rates",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "royalties": {
+          "description": "list of royalties",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Royalty"
+          }
+        }
+      }
+    },
+    "TemplateInfo": {
+      "description": "displayable template info",
+      "type": "object",
+      "required": [
+        "mint_run",
+        "minting_authorized",
+        "name",
+        "next_serial",
+        "nft_contract"
+      ],
+      "properties": {
+        "default_royalties_of_nft_contract": {
+          "description": "if there is no royalty information for the template, the optional default royalty information of the snip721 contract",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DisplayRoyaltyInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mint_run": {
+          "description": "mint run number",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "minting_authorized": {
+          "description": "true if the minting contract is authorized to mint with this nft contract",
+          "type": "boolean"
+        },
+        "minting_limit": {
+          "description": "optional limit to how many clones will be minted for this nft in this mint run",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "name": {
+          "description": "identifier for this template",
+          "type": "string"
+        },
+        "next_serial": {
+          "description": "next serial number to use",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "nft_contract": {
+          "description": "nft contract this template should use for minting",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ContractInfo"
+            }
+          ]
+        },
+        "private_metadata": {
+          "description": "optional private metadata that can only be seen by the owner and whitelist. This will only be displayed if an admin is querying",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Metadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "public_metadata": {
+          "description": "optional public metadata that can be seen by everyone",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Metadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "royalty_info_of_template": {
+          "description": "optional royalty information for this template",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RoyaltyInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Trait": {
+      "description": "attribute trait",
+      "type": "object",
+      "required": [
+        "value"
+      ],
+      "properties": {
+        "display_type": {
+          "description": "indicates how a trait should be displayed",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_value": {
+          "description": "optional max value for numerical traits",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trait_type": {
+          "description": "name of the trait",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "value": {
+          "description": "trait value",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
