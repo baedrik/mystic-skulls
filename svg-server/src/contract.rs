@@ -580,6 +580,7 @@ fn revoke_permit<S: Storage>(
 pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryMsg) -> QueryResult {
     let response = match msg {
         QueryMsg::AuthorizedAddresses { viewer, permit } => query_addresses(deps, viewer, permit),
+        QueryMsg::Category { viewer, permit, name, index, start_at, limit, display_svg } => query_category(deps, viewer, permit, name.as_deref(), index, start_at, limit, display_svg),
         QueryMsg::Template {
             viewer,
             permit,
@@ -607,32 +608,64 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
     pad_query_result(response, BLOCK_SIZE)
 }
 
-/// Returns QueryResult displaying information about all nft contracts this minter uses
+/// Returns QueryResult displaying a trait category
 ///
 /// # Arguments
 ///
 /// * `deps` - reference to Extern containing all the contract's external dependencies
 /// * `viewer` - optional address and key making an authenticated query request
 /// * `permit` - optional permit with "owner" permission
-/// * `page` - optional page to display
-/// * `page_size` - optional number of contracts to display
-fn query_contracts<S: Storage, A: Api, Q: Querier>(
+/// * `name` - optional name of the category to display
+/// * `index` - optional index of the category to display
+/// * `start_at` - optional variant index to start the display
+/// * `limit` - optional max number of variants to display
+/// * `display_svg` - optionally true if svgs should be displayed
+fn query_category<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     viewer: Option<ViewerInfo>,
     permit: Option<Permit>,
-    page: Option<u16>,
-    page_size: Option<u16>,
+    name: Option<&str>,
+    index: Option<u8>,
+    start_at: Option<u8>,
+    limit: Option<u8>,
+    display_svg: Option<bool>,
 ) -> QueryResult {
     // only allow admins to do this
     check_admin(deps, viewer, permit)?;
-    let page = page.unwrap_or(0);
-    let limit = page_size.unwrap_or(30);
-    let start = page * limit;
-    let state: State = load(&deps.storage, STATE_KEY)?;
-    let end = min(start + limit, state.contract_cnt);
-    let mut nft_contracts: Vec<ContractInfo> = Vec::new();
-    let contr_store = ReadonlyPrefixedStorage::new(PREFIX_CONTRACT, &deps.storage);
+    let svgs = display_svg.unwrap_or(false);
+    let max = limit.unwrap_or_else(|| {
+        if svgs {
+            5
+        } else {
+            30
+        }
+    });
+    let start = start_at.unwrap_or(0);
+    let numcats: u8 = load(&deps.storage, NUM_CATS_KEY)?;
+    let cat_idx = if let Some(nm) = name {
+        let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
+        may_load::<u8, _>(&cat_map, nm.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Category name:  {} does not exist", nm)))?
+    } else if let Some(i) = index {
+        if i >= numcats {
+            return Err(StdError::generic_err(format!("There are only {} categories", numcats)));
+        }
+        i
+    } else {
+        0u8
+    };
+    let cat_key = cat_idx.to_le_bytes();
+    let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
+    let cat: Category = may_load(&cat_store, &cat_key)?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
+    let end = min(start + max, cat.jawed_weights.len() as u8);
+    let mut variants: Vec<VariantInfo> = Vec::new();
+    let var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &cat_key], &deps. storage);
     for idx in start..end {
+        let var: Variant = may_load(&var_store, &idx.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Variant storage is corrupt"))?;
+        let var_inf = VariantInfo {
+            name: var.name,
+            svg: var.svg.filter(|_| svgs),
+            jawed_weight
+        }
         let may_contr: Option<StoreContractInfo> = may_load(&contr_store, &idx.to_le_bytes())?;
         if let Some(c) = may_contr {
             nft_contracts.push(c.into_humanized(&deps.api)?);

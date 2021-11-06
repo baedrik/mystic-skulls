@@ -592,6 +592,104 @@
       }
     },
     {
+      "description": "display the svg server contracts",
+      "type": "object",
+      "required": [
+        "svg_server_contracts"
+      ],
+      "properties": {
+        "svg_server_contracts": {
+          "type": "object",
+          "required": [
+            "viewer"
+          ],
+          "properties": {
+            "page": {
+              "description": "optional page number to display.  Defaults to 0 (first page) if not provided",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "page_size": {
+              "description": "optional limit to the number of contracts to show.  Defaults to 100 if not specified",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "viewer": {
+              "description": "address and viewing key of the querier",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "display the default svg server contract",
+      "type": "object",
+      "required": [
+        "default_svg_server"
+      ],
+      "properties": {
+        "default_svg_server": {
+          "type": "object",
+          "required": [
+            "viewer"
+          ],
+          "properties": {
+            "viewer": {
+              "description": "address and viewing key of the querier",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "display a token's ImageInfo",
+      "type": "object",
+      "required": [
+        "image_info"
+      ],
+      "properties": {
+        "image_info": {
+          "type": "object",
+          "required": [
+            "token_id",
+            "viewer"
+          ],
+          "properties": {
+            "token_id": {
+              "description": "token whose image info to display",
+              "type": "string"
+            },
+            "viewer": {
+              "description": "address and viewing key of the querier",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
       "description": "perform queries by passing permits instead of viewing keys",
       "type": "object",
       "required": [
@@ -1046,6 +1144,71 @@
                     "string",
                     "null"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "display the svg server contracts",
+          "type": "object",
+          "required": [
+            "svg_server_contracts"
+          ],
+          "properties": {
+            "svg_server_contracts": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "description": "optional page number to display.  Defaults to 0 (first page) if not provided",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint16",
+                  "minimum": 0.0
+                },
+                "page_size": {
+                  "description": "optional limit to the number of contracts to show.  Defaults to 100 if not specified",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint16",
+                  "minimum": 0.0
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "display the default svg server contract",
+          "type": "object",
+          "required": [
+            "default_svg_server"
+          ],
+          "properties": {
+            "default_svg_server": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "description": "display a token's ImageInfo",
+          "type": "object",
+          "required": [
+            "image_info"
+          ],
+          "properties": {
+            "image_info": {
+              "type": "object",
+              "required": [
+                "token_id"
+              ],
+              "properties": {
+                "token_id": {
+                  "description": "token whose image info to display",
+                  "type": "string"
                 }
               }
             }

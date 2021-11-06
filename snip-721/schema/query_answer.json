@@ -628,6 +628,77 @@
           }
         }
       }
+    },
+    {
+      "description": "display the svg server contracts",
+      "type": "object",
+      "required": [
+        "svg_server_contracts"
+      ],
+      "properties": {
+        "svg_server_contracts": {
+          "type": "object",
+          "required": [
+            "count",
+            "svg_servers"
+          ],
+          "properties": {
+            "count": {
+              "description": "number of svg server contracts",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "svg_servers": {
+              "description": "svg server contracts",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ContractInfo"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "display the default svg server contract",
+      "type": "object",
+      "required": [
+        "default_svg_server"
+      ],
+      "properties": {
+        "default_svg_server": {
+          "type": "object",
+          "required": [
+            "default_svg_server"
+          ],
+          "properties": {
+            "default_svg_server": {
+              "$ref": "#/definitions/ContractInfo"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "display a token's ImageInfo",
+      "type": "object",
+      "required": [
+        "image_info"
+      ],
+      "properties": {
+        "image_info": {
+          "type": "object",
+          "required": [
+            "image_info"
+          ],
+          "properties": {
+            "image_info": {
+              "$ref": "#/definitions/ImageInfo"
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
@@ -648,6 +719,28 @@
             "string",
             "null"
           ]
+        }
+      }
+    },
+    "ContractInfo": {
+      "description": "code hash and address of a secret contract",
+      "type": "object",
+      "required": [
+        "address",
+        "code_hash"
+      ],
+      "properties": {
+        "address": {
+          "description": "contract's address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          ]
+        },
+        "code_hash": {
+          "description": "contract's code hash string",
+          "type": "string"
         }
       }
     },
@@ -886,6 +979,62 @@
     },
     "HumanAddr": {
       "type": "string"
+    },
+    "ImageInfo": {
+      "description": "data that determines a token's appearance",
+      "type": "object",
+      "required": [
+        "current",
+        "gene",
+        "natural",
+        "previous"
+      ],
+      "properties": {
+        "current": {
+          "description": "current image svg index array",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        },
+        "gene": {
+          "description": "the random gene",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "natural": {
+          "description": "complete initial genetic image svg index array",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        },
+        "previous": {
+          "description": "previous image svg index array",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        },
+        "svg_server": {
+          "description": "optional svg server contract if not using the default",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
     },
     "MediaFile": {
       "description": "media file",

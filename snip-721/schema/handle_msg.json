@@ -11,7 +11,14 @@
       "properties": {
         "mint_nft": {
           "type": "object",
+          "required": [
+            "entropy"
+          ],
           "properties": {
+            "entropy": {
+              "description": "entropy for gene randomization",
+              "type": "string"
+            },
             "memo": {
               "description": "optional memo for the tx",
               "type": [
@@ -117,94 +124,6 @@
               "type": [
                 "string",
                 "null"
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "create a mint run of clones that will have MintRunInfos showing they are serialized copies in the same mint run with the specified quantity.  Mint_run_id can be used to track mint run numbers in subsequent MintNftClones calls.  So, if provided, the first MintNftClones call will have mint run number 1, the next time MintNftClones is called with the same mint_run_id, those clones will have mint run number 2, etc...  If no mint_run_id is specified, the clones will not have any mint run number assigned to their MintRunInfos",
-      "type": "object",
-      "required": [
-        "mint_nft_clones"
-      ],
-      "properties": {
-        "mint_nft_clones": {
-          "type": "object",
-          "required": [
-            "quantity"
-          ],
-          "properties": {
-            "memo": {
-              "description": "optional memo for the mint txs",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "mint_run_id": {
-              "description": "optional mint run ID",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "owner": {
-              "description": "optional owner address. if omitted, owned by the message sender",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/HumanAddr"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "padding": {
-              "description": "optional message length padding",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "private_metadata": {
-              "description": "optional private metadata that can only be seen by the owner and whitelist",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Metadata"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "public_metadata": {
-              "description": "optional public metadata that can be seen by everyone",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Metadata"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "quantity": {
-              "description": "number of clones to mint",
-              "type": "integer",
-              "format": "uint32",
-              "minimum": 0.0
-            },
-            "royalty_info": {
-              "description": "optional royalty information for these tokens",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/RoyaltyInfo"
-                },
-                {
-                  "type": "null"
-                }
               ]
             }
           }
@@ -1228,6 +1147,75 @@
           }
         }
       }
+    },
+    {
+      "description": "allow an admin to set a new default svg server contract",
+      "type": "object",
+      "required": [
+        "set_default_svg_server"
+      ],
+      "properties": {
+        "set_default_svg_server": {
+          "type": "object",
+          "required": [
+            "svg_server"
+          ],
+          "properties": {
+            "padding": {
+              "description": "optional message length padding",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "svg_server": {
+              "description": "svg server contract address",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/HumanAddr"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "set a token's ImageInfo.  This can only be called be an authorized minter",
+      "type": "object",
+      "required": [
+        "set_image_info"
+      ],
+      "properties": {
+        "set_image_info": {
+          "type": "object",
+          "required": [
+            "image_info",
+            "token_id"
+          ],
+          "properties": {
+            "image_info": {
+              "description": "the new image info",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ImageInfo"
+                }
+              ]
+            },
+            "padding": {
+              "description": "optional message length padding",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "token_id": {
+              "description": "id of the token whose image info should be updated",
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
@@ -1452,6 +1440,62 @@
     "HumanAddr": {
       "type": "string"
     },
+    "ImageInfo": {
+      "description": "data that determines a token's appearance",
+      "type": "object",
+      "required": [
+        "current",
+        "gene",
+        "natural",
+        "previous"
+      ],
+      "properties": {
+        "current": {
+          "description": "current image svg index array",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        },
+        "gene": {
+          "description": "the random gene",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "natural": {
+          "description": "complete initial genetic image svg index array",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        },
+        "previous": {
+          "description": "previous image svg index array",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        },
+        "svg_server": {
+          "description": "optional svg server contract if not using the default",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
     "MediaFile": {
       "description": "media file",
       "type": "object",
@@ -1517,7 +1561,14 @@
     "Mint": {
       "description": "token mint info used when doing a BatchMint",
       "type": "object",
+      "required": [
+        "entropy"
+      ],
       "properties": {
+        "entropy": {
+          "description": "entropy for gene randomization",
+          "type": "string"
+        },
         "memo": {
           "description": "optional memo for the tx",
           "type": [

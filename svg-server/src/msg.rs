@@ -138,6 +138,24 @@ pub enum QueryMsg {
         /// are provided, the viewer will be ignored
         permit: Option<Permit>,
     },
+    /// displays a trait category
+    Category {
+        /// optional address and viewing key of an admin
+        viewer: Option<ViewerInfo>,
+        /// optional permit used to verify admin identity.  If both viewer and permit
+        /// are provided, the viewer will be ignored
+        permit: Option<Permit>,
+        /// optional category name to display
+        name: Option<String>,
+        /// optional category index to display
+        index: Option<u8>,
+        /// optional trait variant index to start at
+        start_at: Option<u8>,
+        /// max number of variants to display
+        limit: Option<u8>,
+        /// optionally true if svgs should be displayed.  Defaults to false
+        display_svg: Option<bool>,
+    },
     /// view the info of one template
     Template {
         /// optional address and viewing key of an admin
@@ -203,6 +221,16 @@ pub enum QueryAnswer {
         minters: Vec<HumanAddr>,
         viewers: Vec<HumanAddr>,
     },
+    /// display a trait category
+    Category {
+        /// number of categories
+        category_count: u8,
+        /// this category's index
+        index: u8,
+        /// number of variants in this category
+        variant_count: u8,
+        category: CategoryInfo,
+    }
 }
 
 /// trait variant information
