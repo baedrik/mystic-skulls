@@ -47,20 +47,88 @@
       }
     },
     {
-      "description": "response from adding a new template",
+      "description": "response from adding/removing viewers",
       "type": "object",
       "required": [
-        "add_template"
+        "viewers_list"
       ],
       "properties": {
-        "add_template": {
+        "viewers_list": {
           "type": "object",
           "required": [
-            "name"
+            "viewers"
           ],
           "properties": {
-            "name": {
-              "description": "name of the new template",
+            "viewers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from adding/removing minters",
+      "type": "object",
+      "required": [
+        "minters_list"
+      ],
+      "properties": {
+        "minters_list": {
+          "type": "object",
+          "required": [
+            "minters"
+          ],
+          "properties": {
+            "minters": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from adding new trait categories",
+      "type": "object",
+      "required": [
+        "add_categories"
+      ],
+      "properties": {
+        "add_categories": {
+          "type": "object",
+          "required": [
+            "count"
+          ],
+          "properties": {
+            "count": {
+              "description": "number of categories",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from adding new trait variants",
+      "type": "object",
+      "required": [
+        "add_variants"
+      ],
+      "properties": {
+        "add_variants": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
               "type": "string"
             }
           }
@@ -68,73 +136,200 @@
       }
     },
     {
-      "description": "response from adding or updating an nft contract",
+      "description": "response from modifying a trait category",
       "type": "object",
       "required": [
-        "add_nft_contract"
+        "modify_category"
       ],
       "properties": {
-        "add_nft_contract": {
+        "modify_category": {
           "type": "object",
           "required": [
-            "nft_contract_info"
+            "status"
           ],
           "properties": {
-            "nft_contract_info": {
-              "description": "the nft contract info that was stored",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/ContractInfo"
-                }
-              ]
+            "status": {
+              "type": "string"
             }
           }
         }
       }
     },
     {
-      "description": "response from updating a template's royalty info",
+      "description": "response from modifying existing trait variants",
       "type": "object",
       "required": [
-        "set_royalty_info"
+        "modify_variants"
       ],
       "properties": {
-        "set_royalty_info": {
+        "modify_variants": {
           "type": "object",
+          "required": [
+            "status"
+          ],
           "properties": {
-            "royalty_info": {
-              "description": "the new royalty information for this template",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/RoyaltyInfo"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+            "status": {
+              "type": "string"
             }
           }
         }
       }
     },
     {
-      "description": "response for starting a new mint run for a template",
+      "description": "response from setting common metadata",
       "type": "object",
       "required": [
-        "re_release_nft"
+        "set_metadata"
       ],
       "properties": {
-        "re_release_nft": {
+        "set_metadata": {
           "type": "object",
           "required": [
-            "mint_run"
+            "status"
           ],
           "properties": {
-            "mint_run": {
-              "description": "number of the new mint run just started",
-              "type": "integer",
-              "format": "uint32",
-              "minimum": 0.0
+            "status": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from setting the roll config",
+      "type": "object",
+      "required": [
+        "set_roll_config"
+      ],
+      "properties": {
+        "set_roll_config": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from adding dependencies",
+      "type": "object",
+      "required": [
+        "add_dependencies"
+      ],
+      "properties": {
+        "add_dependencies": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from removing dependencies",
+      "type": "object",
+      "required": [
+        "remove_dependencies"
+      ],
+      "properties": {
+        "remove_dependencies": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from modifying dependencies",
+      "type": "object",
+      "required": [
+        "modify_dependencies"
+      ],
+      "properties": {
+        "modify_dependencies": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from adding trait hiders",
+      "type": "object",
+      "required": [
+        "add_hiders"
+      ],
+      "properties": {
+        "add_hiders": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from removing trait hiders",
+      "type": "object",
+      "required": [
+        "remove_hiders"
+      ],
+      "properties": {
+        "remove_hiders": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from modifying trait hiders",
+      "type": "object",
+      "required": [
+        "modify_hiders"
+      ],
+      "properties": {
+        "modify_hiders": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string"
             }
           }
         }
@@ -162,77 +357,8 @@
     }
   ],
   "definitions": {
-    "ContractInfo": {
-      "description": "code hash and address of a secret contract",
-      "type": "object",
-      "required": [
-        "address",
-        "code_hash"
-      ],
-      "properties": {
-        "address": {
-          "description": "contract's address",
-          "allOf": [
-            {
-              "$ref": "#/definitions/HumanAddr"
-            }
-          ]
-        },
-        "code_hash": {
-          "description": "contract's code hash string",
-          "type": "string"
-        }
-      }
-    },
     "HumanAddr": {
       "type": "string"
-    },
-    "Royalty": {
-      "description": "data for a single royalty",
-      "type": "object",
-      "required": [
-        "rate",
-        "recipient"
-      ],
-      "properties": {
-        "rate": {
-          "description": "royalty rate",
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 0.0
-        },
-        "recipient": {
-          "description": "address to send royalties to",
-          "allOf": [
-            {
-              "$ref": "#/definitions/HumanAddr"
-            }
-          ]
-        }
-      }
-    },
-    "RoyaltyInfo": {
-      "description": "all royalty information",
-      "type": "object",
-      "required": [
-        "decimal_places_in_rates",
-        "royalties"
-      ],
-      "properties": {
-        "decimal_places_in_rates": {
-          "description": "decimal places in royalty rates",
-          "type": "integer",
-          "format": "uint8",
-          "minimum": 0.0
-        },
-        "royalties": {
-          "description": "list of royalties",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Royalty"
-          }
-        }
-      }
     }
   }
 }

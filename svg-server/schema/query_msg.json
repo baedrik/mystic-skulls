@@ -4,13 +4,13 @@
   "description": "Queries",
   "anyOf": [
     {
-      "description": "lists the admins for this minter",
+      "description": "lists the authorized addresses for this server",
       "type": "object",
       "required": [
-        "admins"
+        "authorized_addresses"
       ],
       "properties": {
-        "admins": {
+        "authorized_addresses": {
           "type": "object",
           "properties": {
             "permit": {
@@ -40,214 +40,380 @@
       }
     },
     {
-      "description": "view the info of one template",
+      "description": "displays a trait category",
       "type": "object",
       "required": [
-        "template"
+        "category"
       ],
       "properties": {
-        "template": {
+        "category": {
+          "type": "object",
+          "properties": {
+            "display_svg": {
+              "description": "optionally true if svgs should be displayed.  Defaults to false",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "index": {
+              "description": "optional category index to display",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "limit": {
+              "description": "max number of variants to display",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "name": {
+              "description": "optional category name to display",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "permit": {
+              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "start_at": {
+              "description": "optional trait variant index to start at",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "displays a layer variant",
+      "type": "object",
+      "required": [
+        "variant"
+      ],
+      "properties": {
+        "variant": {
+          "type": "object",
+          "properties": {
+            "by_index": {
+              "description": "optionally display by the category and variant indices",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/StoredLayerId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "by_name": {
+              "description": "optionally display by the category and variant names",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/LayerId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "display_svg": {
+              "description": "optionally true if svgs should be displayed.  Defaults to false",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "permit": {
+              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "displays the common metadata",
+      "type": "object",
+      "required": [
+        "common_metadata"
+      ],
+      "properties": {
+        "common_metadata": {
+          "type": "object",
+          "properties": {
+            "permit": {
+              "description": "optional permit used to verify identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin, minter, or viewer",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "displays the layer categories that get skipped during rolls and the ones that must be rolled first (and total number of categories)",
+      "type": "object",
+      "required": [
+        "roll_config"
+      ],
+      "properties": {
+        "roll_config": {
+          "type": "object",
+          "properties": {
+            "permit": {
+              "description": "optional permit used to verify identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin, minter, or viewer",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "displays the trait variants with dependencies (multiple layers)",
+      "type": "object",
+      "required": [
+        "dependencies"
+      ],
+      "properties": {
+        "dependencies": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "description": "max number of dependencies to display",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "permit": {
+              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "start_at": {
+              "description": "optional dependency index to start at",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "displays the launch trait variants that hide other trait variants",
+      "type": "object",
+      "required": [
+        "hiders"
+      ],
+      "properties": {
+        "hiders": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "description": "max number of hiders to display",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "permit": {
+              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "start_at": {
+              "description": "optional hider index to start at",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "creates a new and unique genetic image.  This can only be called by an authorized minter",
+      "type": "object",
+      "required": [
+        "new_gene"
+      ],
+      "properties": {
+        "new_gene": {
           "type": "object",
           "required": [
-            "template_name"
+            "background",
+            "entropy",
+            "height",
+            "sender",
+            "time",
+            "viewer"
           ],
           "properties": {
-            "permit": {
-              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Permit"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "template_name": {
-              "description": "name of the template to view",
+            "background": {
+              "description": "the name of the background layer variant to use",
               "type": "string"
             },
-            "viewer": {
-              "description": "optional address and viewing key of an admin",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/ViewerInfo"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "view info of all templates",
-      "type": "object",
-      "required": [
-        "all_templates"
-      ],
-      "properties": {
-        "all_templates": {
-          "type": "object",
-          "properties": {
-            "page": {
-              "description": "optional page",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint16",
-              "minimum": 0.0
-            },
-            "page_size": {
-              "description": "optional max number of templates to display",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint16",
-              "minimum": 0.0
-            },
-            "permit": {
-              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Permit"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "viewer": {
-              "description": "optional address and viewing key of an admin",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/ViewerInfo"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "view all the nft contracts this minter can use",
-      "type": "object",
-      "required": [
-        "all_nft_contracts"
-      ],
-      "properties": {
-        "all_nft_contracts": {
-          "type": "object",
-          "properties": {
-            "page": {
-              "description": "optional page",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint16",
-              "minimum": 0.0
-            },
-            "page_size": {
-              "description": "optional max number of templates to display",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint16",
-              "minimum": 0.0
-            },
-            "permit": {
-              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Permit"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "viewer": {
-              "description": "optional address and viewing key of an admin",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/ViewerInfo"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "display the public info of the next tokens that would be minted from the specified templates. If no template names are provided, display info from all templates",
-      "type": "object",
-      "required": [
-        "public_description_of_nfts"
-      ],
-      "properties": {
-        "public_description_of_nfts": {
-          "type": "object",
-          "properties": {
-            "page": {
-              "description": "optional page",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint16",
-              "minimum": 0.0
-            },
-            "page_size": {
-              "description": "optional max number of templates to display",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint16",
-              "minimum": 0.0
-            },
-            "template_names": {
-              "description": "templates whose info should be displayed",
-              "type": [
-                "array",
-                "null"
-              ],
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "display the public info of the next token to be minted from a specified option ID (template).  This is used for a universal minter query that listings will use",
-      "type": "object",
-      "required": [
-        "nft_listing_display"
-      ],
-      "properties": {
-        "nft_listing_display": {
-          "type": "object",
-          "required": [
-            "option_id"
-          ],
-          "properties": {
-            "option_id": {
-              "description": "minting option that would be called upon purchase",
+            "entropy": {
+              "description": "entropy for randomization",
               "type": "string"
+            },
+            "height": {
+              "description": "current block height",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "sender": {
+              "description": "sender of the mint tx",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/HumanAddr"
+                }
+              ]
+            },
+            "time": {
+              "description": "current block time",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "viewer": {
+              "description": "address and viewing key of a minting contract",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                }
+              ]
             }
           }
         }
@@ -261,6 +427,24 @@
     },
     "HumanAddr": {
       "type": "string"
+    },
+    "LayerId": {
+      "description": "identifies a layer",
+      "type": "object",
+      "required": [
+        "category",
+        "variant"
+      ],
+      "properties": {
+        "category": {
+          "description": "the layer category name",
+          "type": "string"
+        },
+        "variant": {
+          "description": "the variant name",
+          "type": "string"
+        }
+      }
     },
     "Permission": {
       "type": "string",
@@ -348,6 +532,27 @@
               "$ref": "#/definitions/Binary"
             }
           ]
+        }
+      }
+    },
+    "StoredLayerId": {
+      "description": "identifies a layer",
+      "type": "object",
+      "required": [
+        "category",
+        "variant"
+      ],
+      "properties": {
+        "category": {
+          "description": "the layer category",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "variant": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
         }
       }
     },

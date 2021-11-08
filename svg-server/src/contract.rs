@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    log, to_binary, Api, CanonicalAddr, CosmosMsg, Env, Extern, HandleResponse, HandleResult,
-    HumanAddr, InitResponse, InitResult, Querier, QueryResult, ReadonlyStorage, StdError,
+    to_binary, Api, CanonicalAddr, Env, Extern, HandleResponse, HandleResult,
+    HumanAddr, InitResponse, InitResult, Querier, QueryResult, StdError,
     StdResult, Storage,
 };
 use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
@@ -8,23 +8,20 @@ use std::cmp::min;
 
 use secret_toolkit::{
     permit::{validate, Permit, RevokedPermits},
-    utils::{pad_handle_result, pad_query_result, HandleCallback, Query},
+    utils::{pad_handle_result, pad_query_result},
 };
 
-use crate::contract_info::{ContractInfo, StoreContractInfo};
-use crate::factory_msgs::FactoryHandleMsg;
 use crate::msg::{
-    HandleAnswer, HandleMsg, InitMsg, QueryAnswer,
-    QueryMsg, CategoryInfo, VariantInfo, VariantModInfo, Weights, ForcedVariants, ViewerInfo,
+    HandleAnswer, HandleMsg, InitMsg, QueryAnswer, LayerId,
+    QueryMsg, CategoryInfo, VariantInfo, VariantModInfo, Weights, ForcedVariants, ViewerInfo, VariantInfoPlus, Dependencies, StoredLayerId,
 };
-use crate::rand::sha_256;
+use crate::rand::{ extend_entropy, sha_256, Prng };
 use crate::state::{
-    Category, Variant, CommonMetadata, ADMINS_KEY, MY_ADDRESS_KEY, PREFIX_CATEGORY_MAP, PREFIX_VARIANT_MAP,
+    Category, Variant, CommonMetadata, RollConfig, StoredDependencies, ADMINS_KEY, MY_ADDRESS_KEY, PREFIX_CATEGORY_MAP, PREFIX_VARIANT_MAP,
     PREFIX_CATEGORY, PREFIX_VARIANT, PREFIX_REVOKED_PERMITS,
-    PREFIX_VIEW_KEY, PRNG_SEED_KEY, VIEWERS_KEY, MINTERS_KEY, NUM_CATS_KEY, METADATA_KEY, PREFIX_GENE,
+    PREFIX_VIEW_KEY, PRNG_SEED_KEY, VIEWERS_KEY, MINTERS_KEY, NUM_CATS_KEY, METADATA_KEY, PREFIX_GENE, ROLL_CONF_KEY, DEPENDENCIES_KEY, HIDERS_KEY,
 };
 use crate::storage::{load, may_load, remove, save};
-use crate::template::{MintAuthCache, StoredTemplate, Template, TemplateInfo};
 use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
 use crate::metadata::{Metadata};
 
@@ -76,6 +73,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     let response = match msg {
         HandleMsg::CreateViewingKey { entropy } => try_create_key(deps, &env, &entropy),
         HandleMsg::SetViewingKey { key, .. } => try_set_key(deps, &env.message.sender, key),
+        HandleMsg::SetRollConfig { skip, first } => try_set_roll_config(deps, &env.message.sender, skip, first),
         HandleMsg::AddCategories { categories } => {
             try_add_categories(deps, &env.message.sender, categories)
         }
@@ -114,6 +112,12 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             false,
             AddrType::Minter,
         ),
+        HandleMsg::AddDependencies { dependencies } => try_process_dep_list(deps, &env.message.sender, &dependencies, Action::Add, true),
+        HandleMsg::RemoveDependencies { dependencies } => try_process_dep_list(deps, &env.message.sender, &dependencies, Action::Remove, true),
+        HandleMsg::ModifyDependencies { dependencies } => try_process_dep_list(deps, &env.message.sender, &dependencies, Action::Modify, true),
+        HandleMsg::AddHiders { hiders } => try_process_dep_list(deps, &env.message.sender, &hiders, Action::Add, false),
+        HandleMsg::RemoveHiders { hiders } => try_process_dep_list(deps, &env.message.sender, &hiders, Action::Remove, false),
+        HandleMsg::ModifyHiders { hiders } => try_process_dep_list(deps, &env.message.sender, &hiders, Action::Modify, false),
         HandleMsg::RevokePermit { permit_name } => {
             revoke_permit(&mut deps.storage, &env.message.sender, &permit_name)
         }
@@ -141,13 +145,56 @@ fn try_add_gene<S: Storage, A: Api, Q: Querier>(
     if !minters.contains(&sender_raw) {
         return Err(StdError::unauthorized());
     }
-    let gene_store = PrefixedStorage::new(PREFIX_GENE, &mut deps.storage);
+    let mut gene_store = PrefixedStorage::new(PREFIX_GENE, &mut deps.storage);
     // can not allow a duplicate, even though this should have been weeded out before this msg
     if may_load::<bool, _>(&gene_store, &gene)?.is_some() {
         return Err(StdError::generic_err("This gene has already been minted"));
     }
     save(&mut gene_store, &gene, &true)?;
     Ok(HandleResponse::default())
+}
+
+/// Returns HandleResult
+///
+/// sets layer categories to skip when rolling and the ones to roll first
+///
+/// # Arguments
+///
+/// * `deps` - a mutable reference to Extern containing all the contract's external dependencies
+/// * `sender` - a reference to the message sender
+/// * `skip` - list of categories to skip when rolling
+/// * `first` - list of categories that must be rolled first instead of in layer order
+fn try_set_roll_config<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    sender: &HumanAddr,
+    skip: Vec<String>,
+    first: Vec<String>,
+) -> HandleResult {
+    // only allow admins to do this
+    let admins: Vec<CanonicalAddr> = load(&deps.storage, ADMINS_KEY)?;
+    let sender_raw = deps.api.canonical_address(sender)?;
+    if !admins.contains(&sender_raw) {
+        return Err(StdError::unauthorized());
+    }
+    let numcats: u8 = load(&deps.storage, NUM_CATS_KEY)?;
+    let mut roll: RollConfig = may_load(&deps.storage, ROLL_CONF_KEY)?.unwrap_or(RollConfig {
+        cat_cnt: 0u8,
+        skip: Vec::new(),
+        first: Vec::new(),
+    });
+    // map string names to indices
+    let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
+    let skip_idx = skip.iter().map(|n| may_load::<u8, _>(&cat_map, n.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Category name:  {} does not exist", n)))).collect::<StdResult<Vec<u8>>>()?;
+    let first_idx = first.iter().map(|n| may_load::<u8, _>(&cat_map, n.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Category name:  {} does not exist", n)))).collect::<StdResult<Vec<u8>>>()?;
+    roll.cat_cnt = numcats;
+    roll.skip = skip_idx;
+    roll.first = first_idx;
+    save(&mut deps.storage, ROLL_CONF_KEY, &roll)?;
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![],
+        data: Some(to_binary(&HandleAnswer::SetRollConfig { status: "success".to_string() })?),
+    })
 }
 
 /// Returns HandleResult
@@ -180,12 +227,7 @@ fn try_set_metadata<S: Storage, A: Api, Q: Querier>(
     let mut save_common = false;
     // update public metadata
     if let Some(pub_meta) = public_metadata {
-        // delete the existing is all fields are None
-        let new_pub = if pub_meta.token_uri.is_none() && pub_meta.extension.is_none() {
-            None
-        } else {
-            Some(pub_meta)
-        };
+        let new_pub = filter_metadata(pub_meta)?;
         if common.public != new_pub {
             common.public = new_pub;
             save_common = true;
@@ -193,12 +235,7 @@ fn try_set_metadata<S: Storage, A: Api, Q: Querier>(
     }
     // update private metadata
     if let Some(priv_meta) = private_metadata {
-        // delete the existing is all fields are None
-        let new_priv = if priv_meta.token_uri.is_none() && priv_meta.extension.is_none() {
-            None
-        } else {
-            Some(priv_meta)
-        };
+        let new_priv = filter_metadata(priv_meta)?;
         if common.private != new_priv {
             common.private = new_priv;
             save_common = true;
@@ -260,7 +297,7 @@ fn try_modify_category<S: Storage, A: Api, Q: Querier>(
                 let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
                 let mut cat: Category = may_load(&cat_store, &cat_key)?.ok_or_else(|| StdError::generic_err(format!("Category storage for {} is corrupt", name)))?;
                 cat.name = new_nm;
-                may_cat.insert(cat);
+                may_cat = Some(cat);
                 save_cat = true;
             }
         }
@@ -284,7 +321,7 @@ fn try_modify_category<S: Storage, A: Api, Q: Querier>(
                 cat.forced_jawless = jawless;
                 save_cat = true;
             }
-            may_cat.insert(cat);
+            may_cat = Some(cat);
         }
         if let Some(new_wgts) = weights {
             let mut cat = may_cat.map_or_else(|| {
@@ -303,7 +340,7 @@ fn try_modify_category<S: Storage, A: Api, Q: Querier>(
                 cat.jawless_weights = new_wgts.jawless_weights;
                 save_cat = true;
             }
-            may_cat.insert(cat);
+            may_cat = Some(cat);
         }
         if save_cat {
             let mut cat_store = PrefixedStorage::new(PREFIX_CATEGORY, &mut deps.storage);
@@ -393,18 +430,19 @@ fn try_modify_variants<S: Storage, A: Api, Q: Querier>(
         return Err(StdError::unauthorized());
     }
     for cat_inf in modifications.into_iter() {
-        let cat_name_key = cat_inf.category.as_bytes();
+        let cat_name = cat_inf.category;
+        let cat_name_key = cat_name.as_bytes();
         let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
         // if valid category name
         if let Some(cat_idx) = may_load::<u8, _>(&cat_map, cat_name_key)? {
             let cat_key = cat_idx.to_le_bytes();
             let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
-            let mut cat: Category = may_load(&cat_store, &cat_key)?.ok_or_else(|| StdError::generic_err(format!("Category storage for {} is corrupt", cat_inf.category)))?;
+            let mut cat: Category = may_load(&cat_store, &cat_key)?.ok_or_else(|| StdError::generic_err(format!("Category storage for {} is corrupt", &cat_name)))?;
             let mut save_cat = false;
             for var_mod in cat_inf.modifications.into_iter() {
                 let var_name_key = var_mod.name.as_bytes();
                 let mut var_map = PrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &cat_key], &mut deps.storage);
-                let var_idx: u8 = may_load(&var_map, var_name_key)?.ok_or_else(|| StdError::generic_err(format!("Category {} does not have a variant named {}", cat_inf.category, var_mod.name)))?;
+                let var_idx: u8 = may_load(&var_map, var_name_key)?.ok_or_else(|| StdError::generic_err(format!("Category {} does not have a variant named {}", &cat_name, var_mod.name)))?;
                 // if changing the variant name
                 if var_mod.name != var_mod.modified_variant.name {
                     // remove the old name fomr the map and add the new one
@@ -415,7 +453,7 @@ fn try_modify_variants<S: Storage, A: Api, Q: Querier>(
                     name: var_mod.modified_variant.name,
                     svg: var_mod.modified_variant.svg,
                 };
-                let this_wgt = cat.jawed_weights.get_mut(var_idx as usize).ok_or_else(|| StdError::generic_err(format!("Jawed weight table for category:  {} is corrupt", cat_inf.category)))?;
+                let this_wgt = cat.jawed_weights.get_mut(var_idx as usize).ok_or_else(|| StdError::generic_err(format!("Jawed weight table for category:  {} is corrupt", &cat_name)))?;
                 // if weight is changing, update the table
                 if *this_wgt != var_mod.modified_variant.jawed_weight {
                     *this_wgt = var_mod.modified_variant.jawed_weight;
@@ -424,7 +462,7 @@ fn try_modify_variants<S: Storage, A: Api, Q: Querier>(
                 // if providing a jawless weight
                 if let Some(jawless) = var_mod.modified_variant.jawless_weight {
                     // can't add a jawless weight to a category that does not have them already
-                    let this_jawless = cat.jawless_weights.as_mut().ok_or_else(|| StdError::generic_err(format!("Category:  {} does not have jawless weights, but variant {} does", cat_inf.category, var_mod.modified_variant.name)))?.get_mut(var_idx as usize).ok_or_else(|| StdError::generic_err(format!("Jawless weight table for category:  {} is corrupt", cat_inf.category)))?;
+                    let this_jawless = cat.jawless_weights.as_mut().ok_or_else(|| StdError::generic_err(format!("Category:  {} does not have jawless weights, but variant {} does", &cat_name, &var.name)))?.get_mut(var_idx as usize).ok_or_else(|| StdError::generic_err(format!("Jawless weight table for category:  {} is corrupt", &cat_name)))?;
                     // if weight is changing, update the table
                     if *this_jawless != jawless {
                         *this_jawless = jawless;
@@ -432,7 +470,7 @@ fn try_modify_variants<S: Storage, A: Api, Q: Querier>(
                     }
                 } else if cat.jawless_weights.is_some() {
                     // must provide a jawless weight for a category that has them
-                    return Err(StdError::generic_err(format!("Category:  {} has jawless weights, but variant {} does not", cat_inf.category, var_mod.modified_variant.name)));
+                    return Err(StdError::generic_err(format!("Category:  {} has jawless weights, but variant {} does not", &cat_name, &var.name)));
                 }
                 let mut var_store = PrefixedStorage::multilevel(&[PREFIX_VARIANT, &cat_key], &mut deps.storage);
                 save(&mut var_store, &var_idx.to_le_bytes(), &var)?;
@@ -442,7 +480,7 @@ fn try_modify_variants<S: Storage, A: Api, Q: Querier>(
                 save(&mut cat_store, &cat_key, &cat)?;
             }
         } else {
-            return Err(StdError::generic_err(format!("Category name:  {} does not exist", cat_inf.category)));
+            return Err(StdError::generic_err(format!("Category name:  {} does not exist", &cat_name)));
         }
     }
     Ok(HandleResponse {
@@ -581,31 +619,307 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
     let response = match msg {
         QueryMsg::AuthorizedAddresses { viewer, permit } => query_addresses(deps, viewer, permit),
         QueryMsg::Category { viewer, permit, name, index, start_at, limit, display_svg } => query_category(deps, viewer, permit, name.as_deref(), index, start_at, limit, display_svg),
-        QueryMsg::Template {
-            viewer,
-            permit,
-            template_name,
-        } => query_template(deps, viewer, permit, &template_name),
-        QueryMsg::AllTemplates {
-            viewer,
-            permit,
-            page,
-            page_size,
-        } => query_templates(deps, viewer, permit, page, page_size),
-        QueryMsg::AllNftContracts {
-            viewer,
-            permit,
-            page,
-            page_size,
-        } => query_contracts(deps, viewer, permit, page, page_size),
-        QueryMsg::PublicDescriptionOfNfts {
-            template_names,
-            page,
-            page_size,
-        } => query_pub_desc(deps, template_names, page, page_size),
-        QueryMsg::NftListingDisplay { option_id } => query_listing_disp(deps, option_id),
+        QueryMsg::Variant { viewer, permit, by_name, by_index, display_svg } => query_variant(deps, viewer, permit, by_name.as_ref(), by_index, display_svg),
+        QueryMsg::CommonMetadata { viewer, permit } => query_common_metadata(deps, viewer, permit),
+        QueryMsg::RollConfig { viewer, permit } => query_roll_config(deps, viewer, permit),
+        QueryMsg::Dependencies { viewer, permit, start_at, limit } => query_dependencies(deps, viewer, permit, start_at, limit),
+        QueryMsg::Hiders { viewer, permit, start_at, limit } => query_hiders(deps, viewer, permit, start_at, limit),
+        QueryMsg::NewGene { viewer, height, time, sender, entropy, background } => query_new_gene(deps, viewer, height, time, &sender, &entropy, &background),
     };
     pad_query_result(response, BLOCK_SIZE)
+}
+
+
+/// Returns QueryResult which reveals the complete genetic image and current base reveal
+/// image of a new, unique NFT
+///
+/// # Arguments
+///
+/// * `deps` - reference to Extern containing all the contract's external dependencies
+/// * `viewer` - address and key making an authenticated query request
+/// * `height` - the current block height
+/// * `time` - the current block time
+/// * `sender` - a reference to the address sending the mint tx
+/// * `entropy` - entropy string slice for randomization
+/// * `background` - background layer variant name
+fn query_new_gene<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    viewer: ViewerInfo,
+    height: u64,
+    time: u64,
+    sender: &HumanAddr,
+    entropy: &str,
+    background: &str,
+) -> QueryResult {
+    let (querier, _) = get_querier(deps, Some(viewer), None)?;
+    // only allow minters to call this
+    let minters: Vec<CanonicalAddr> = may_load(&deps.storage, MINTERS_KEY)?.unwrap_or_else(Vec::new);
+    if !minters.contains(&querier) {
+        return Err(StdError::unauthorized());
+    }
+    let prng_seed: Vec<u8> = load(&deps.storage, PRNG_SEED_KEY)?;
+    let rng_entropy = extend_entropy(height, time, sender, entropy.as_bytes());
+    let mut rng = Prng::new(&prng_seed, &rng_entropy);
+    let numcats: u8 = load(&deps.storage, NUM_CATS_KEY)?;
+    let roll: RollConfig = may_load(&deps.storage, ROLL_CONF_KEY)?.unwrap_or(RollConfig {
+        cat_cnt: numcats,
+        skip: Vec::new(),
+        first: Vec::new(),
+    });
+    let mut current_image: Vec<u8> = vec![255; numcats as usize];
+    let mut genetic_image: Vec<u8> = current_image.clone();
+
+    // background is always the first layer
+    let var_map = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &0u8.to_le_bytes()], &deps.storage);
+    let var_idx: u8 = may_load(&var_map, background.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Background does not have a variant named {}", background)))?;
+    current_image[0] = var_idx;
+    genetic_image[0] = var_idx;
+
+    let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
+    let mut is_cyclops = false;
+    let mut is_jawless = false;
+    let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
+    let eye_type_idx: u8 = may_load(&cat_map, "Eye Type".as_bytes())?.ok_or_else(|| StdError::generic_err("Eye Type layer category not found"))?;
+    let chin_idx: u8 = may_load(&cat_map, "Chin".as_bytes())?.ok_or_else(|| StdError::generic_err("Chin layer category not found"))?;
+    let eye_type_var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &eye_type_idx.to_le_bytes()], &deps. storage);
+    let chin_var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &chin_idx.to_le_bytes()], &deps. storage);
+    // roll the ones that should be first
+    for inits in roll.first.iter() {
+        let cat: Category = may_load(&cat_store, &inits.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
+        let winner = draw_variant(&mut rng, &cat.jawed_weights);
+        // if we picked an eye type
+        if *inits == eye_type_idx {
+            let eye_type: Variant = may_load(&eye_type_var_store, &winner.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Eye Type variant storage is corrupt"))?;
+            is_cyclops = eye_type.name == *"Cyclops";
+        } else if *inits == chin_idx {
+            let chin: Variant = may_load(&chin_var_store, &winner.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Chin variant storage is corrupt"))?;
+            is_jawless = chin.name == *"None";
+        }
+        current_image[*inits as usize] = winner;
+        genetic_image[*inits as usize] = winner;
+    }
+
+    let depends: Vec<StoredDependencies> = may_load(&deps.storage, DEPENDENCIES_KEY)?.unwrap_or_else(Vec::new);
+    // roll the rest
+    for idx in 1u8..numcats {
+        // don't need to roll if we already did or it should be skipped
+        if roll.skip.contains(&idx) || roll.first.contains(&idx) {
+            continue;
+        }
+        let cat: Category = may_load(&cat_store, &idx.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
+        // grab the right weight table
+        let weights = if is_jawless {
+            cat.jawless_weights.map_or(cat.jawed_weights, |w| w)
+        } else {
+            cat.jawed_weights
+        };
+        // see if there is a forced variant
+        let forced = if is_cyclops {
+            cat.forced_cyclops
+        } else if is_jawless {
+            cat.forced_jawless
+        } else {
+            None
+        };
+        // forced variants are revealed immediately
+        let (winner, reveal_it) = if let Some(f) = forced {
+            (f, true)
+        } else {
+            (draw_variant(&mut rng, &weights), false)
+        };
+        genetic_image[idx as usize] = winner;
+        if reveal_it {
+            current_image[idx as usize] = winner;
+        }
+        // add additional layers for this trait if necessary
+        let id = StoredLayerId {
+            category: idx,
+            variant: winner,
+        };
+        if let Some(dep) = depends.iter().find(|d| d.id == id) {
+            for multi in dep.correlated.iter() {
+                genetic_image[multi.category as usize] = multi.variant;
+            }
+        }
+    }
+    // create a uniqueness array that disregards variants that get hidden by other variants
+    let hiders: Vec<StoredDependencies> = may_load(&deps.storage, HIDERS_KEY)?.unwrap_or_else(Vec::new);
+    let mut unique_check = genetic_image.clone();
+    for idx in 1u8..numcats {
+        let hider_id = StoredLayerId {
+            category: idx,
+            variant: genetic_image[idx as usize],
+        };
+        if let Some(hider) = hiders.iter().find(|h| h.id == hider_id) {
+            for hidden in hider.correlated.iter() {
+                if genetic_image[hidden.category as usize] == hidden.variant {
+                    let var_map = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &hidden.category.to_le_bytes()], &deps.storage);
+                    let none_idx: u8 = may_load(&var_map, "None".as_bytes())?.ok_or_else(|| StdError::generic_err("A hidden variant's category does not have a None variant"))?;
+                    unique_check[hidden.category as usize] = none_idx;
+                }
+            }
+        }
+    }
+    to_binary(&QueryAnswer::NewGene {
+        current_image,
+        genetic_image,
+        unique_check,
+    })
+}
+
+/// Returns QueryResult displaying the layer categories that should be skipped when rolling
+/// and the ones that must be rolled first (and the total number of categories)
+///
+/// # Arguments
+///
+/// * `deps` - reference to Extern containing all the contract's external dependencies
+/// * `viewer` - optional address and key making an authenticated query request
+/// * `permit` - optional permit with "owner" permission
+fn query_roll_config<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    viewer: Option<ViewerInfo>,
+    permit: Option<Permit>,
+) -> QueryResult {
+    // only allow admins to do this
+    let (_, _) = check_admin(deps, viewer, permit)?;
+    let numcats: u8 = load(&deps.storage, NUM_CATS_KEY)?;
+    let roll: RollConfig = may_load(&deps.storage, ROLL_CONF_KEY)?.unwrap_or(RollConfig {
+        cat_cnt: numcats,
+        skip: Vec::new(),
+        first: Vec::new(),
+    });
+    // map indices to string names
+    let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
+    let skip = roll.skip.iter().map(|u| may_load::<Category, _>(&cat_store, &u.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Category storage is corrupt")).map(|r| r.name)).collect::<StdResult<Vec<String>>>()?;
+    let first = roll.first.iter().map(|u| may_load::<Category, _>(&cat_store, &u.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Category storage is corrupt")).map(|r| r.name)).collect::<StdResult<Vec<String>>>()?;
+
+    to_binary(&QueryAnswer::RollConfig {
+        category_count: roll.cat_cnt,
+        skip,
+        first,
+    })
+}
+
+/// Returns QueryResult displaying the trait variants that require other trait variants
+///
+/// # Arguments
+///
+/// * `deps` - reference to Extern containing all the contract's external dependencies
+/// * `viewer` - optional address and key making an authenticated query request
+/// * `permit` - optional permit with "owner" permission
+/// * `start_at` - optional variant index to start the display
+/// * `limit` - optional max number of variants to display
+fn query_dependencies<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    viewer: Option<ViewerInfo>,
+    permit: Option<Permit>,
+    start_at: Option<u16>,
+    limit: Option<u16>,
+) -> QueryResult {
+    // only allow admins to do this
+    check_admin(deps, viewer, permit)?;
+    let max = limit.unwrap_or(100);
+    let start = start_at.unwrap_or(0);
+    let dependencies: Vec<StoredDependencies> = may_load(&deps.storage, DEPENDENCIES_KEY)?.unwrap_or_else(Vec::new);
+    let count = dependencies.len() as u16;
+    to_binary(&QueryAnswer::Dependencies {
+        count,
+        dependencies: dependencies.iter().skip(start as usize).take(max as usize).map(|d| d.to_display(&deps.storage)).collect::<StdResult<Vec<Dependencies>>>()?,
+    })
+}
+
+/// Returns QueryResult displaying the launch trait variants that hide other trait variants
+///
+/// # Arguments
+///
+/// * `deps` - reference to Extern containing all the contract's external dependencies
+/// * `viewer` - optional address and key making an authenticated query request
+/// * `permit` - optional permit with "owner" permission
+/// * `start_at` - optional variant index to start the display
+/// * `limit` - optional max number of variants to display
+fn query_hiders<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    viewer: Option<ViewerInfo>,
+    permit: Option<Permit>,
+    start_at: Option<u16>,
+    limit: Option<u16>,
+) -> QueryResult {
+    // only allow admins to do this
+    check_admin(deps, viewer, permit)?;
+    let max = limit.unwrap_or(100);
+    let start = start_at.unwrap_or(0);
+    let dependencies: Vec<StoredDependencies> = may_load(&deps.storage, HIDERS_KEY)?.unwrap_or_else(Vec::new);
+    let count = dependencies.len() as u16;
+    to_binary(&QueryAnswer::Hiders {
+        count,
+        hiders: dependencies.iter().skip(start as usize).take(max as usize).map(|d| d.to_display(&deps.storage)).collect::<StdResult<Vec<Dependencies>>>()?,
+    })
+}
+
+/// Returns QueryResult displaying a layer variant
+///
+/// # Arguments
+///
+/// * `deps` - reference to Extern containing all the contract's external dependencies
+/// * `viewer` - optional address and key making an authenticated query request
+/// * `permit` - optional permit with "owner" permission
+/// * `by_name` - optional reference to the LayerId using string names
+/// * `by_index` - optional StoredLayerId using indices
+/// * `display_svg` - optionally true if svgs should be displayed
+#[allow(clippy::too_many_arguments)]
+fn query_variant<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    viewer: Option<ViewerInfo>,
+    permit: Option<Permit>,
+    by_name: Option<&LayerId>,
+    by_index: Option<StoredLayerId>,
+    display_svg: Option<bool>,
+) -> QueryResult {
+    // only allow admins to do this
+    check_admin(deps, viewer, permit)?;
+    let svgs = display_svg.unwrap_or(false);
+    let layer_id = if let Some(id) = by_index {
+        id
+    } else if let Some(id) = by_name {
+        id.to_stored(&deps.storage)?
+    } else {
+        return Err(StdError::generic_err("Must specify a layer ID by either names or indices"));
+    };
+    // get the dependencies and hiders lists
+    let depends: Vec<StoredDependencies> = may_load(&deps.storage, DEPENDENCIES_KEY)?.unwrap_or_else(Vec::new);
+    let hiders: Vec<StoredDependencies> = may_load(&deps.storage, HIDERS_KEY)?.unwrap_or_else(Vec::new);
+    let cat_key = layer_id.category.to_le_bytes();
+    let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
+    let cat: Category = may_load(&cat_store, &cat_key)?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
+    let var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &cat_key], &deps. storage);
+    // see if this variant requires other layer variants
+    let includes = if let Some(dep) = depends.iter().find(|d| d.id == layer_id) {
+        dep.correlated.iter().map(|l| l.to_display(&deps.storage)).collect::<StdResult<Vec<LayerId>>>()?
+    } else {
+        Vec::new()
+    };
+    // see if this variant hides other layer variants
+    let hides_at_launch = if let Some(dep) = hiders.iter().find(|d| d.id == layer_id) {
+        dep.correlated.iter().map(|l| l.to_display(&deps.storage)).collect::<StdResult<Vec<LayerId>>>()?
+    } else {
+        Vec::new()
+    };
+    let var: Variant = may_load(&var_store, &layer_id.variant.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Variant storage is corrupt"))?;
+    let var_inf = VariantInfoPlus {
+        index: layer_id.variant,
+        variant_info: VariantInfo {
+            name: var.name,
+            svg: var.svg.filter(|_| svgs),
+            jawed_weight: *cat.jawed_weights.get(layer_id.variant as usize).ok_or_else(|| StdError::generic_err("Jawed weight table is corrupt"))?,
+            jawless_weight: cat.jawless_weights.map(|w| w.get(layer_id.variant as usize).cloned().ok_or_else(|| StdError::generic_err("Jawless weight table is corrupt"))).transpose()?,
+        },
+        includes,
+        hides_at_launch,
+    };
+    to_binary(&QueryAnswer::Variant {
+        category_index: layer_id.category,
+        info: var_inf,
+    })
 }
 
 /// Returns QueryResult displaying a trait category
@@ -620,6 +934,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
 /// * `start_at` - optional variant index to start the display
 /// * `limit` - optional max number of variants to display
 /// * `display_svg` - optionally true if svgs should be displayed
+#[allow(clippy::too_many_arguments)]
 fn query_category<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     viewer: Option<ViewerInfo>,
@@ -641,193 +956,76 @@ fn query_category<S: Storage, A: Api, Q: Querier>(
         }
     });
     let start = start_at.unwrap_or(0);
-    let numcats: u8 = load(&deps.storage, NUM_CATS_KEY)?;
+    let category_count: u8 = load(&deps.storage, NUM_CATS_KEY)?;
     let cat_idx = if let Some(nm) = name {
         let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
         may_load::<u8, _>(&cat_map, nm.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Category name:  {} does not exist", nm)))?
     } else if let Some(i) = index {
-        if i >= numcats {
-            return Err(StdError::generic_err(format!("There are only {} categories", numcats)));
+        if i >= category_count {
+            return Err(StdError::generic_err(format!("There are only {} categories", category_count)));
         }
         i
     } else {
         0u8
     };
+    let depends: Vec<StoredDependencies> = may_load(&deps.storage, DEPENDENCIES_KEY)?.unwrap_or_else(Vec::new);
+    let hiders: Vec<StoredDependencies> = may_load(&deps.storage, HIDERS_KEY)?.unwrap_or_else(Vec::new);
     let cat_key = cat_idx.to_le_bytes();
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
     let cat: Category = may_load(&cat_store, &cat_key)?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
-    let end = min(start + max, cat.jawed_weights.len() as u8);
-    let mut variants: Vec<VariantInfo> = Vec::new();
+    let variant_count = cat.jawed_weights.len() as u8;
+    let end = min(start + max, variant_count);
+    let mut variants: Vec<VariantInfoPlus> = Vec::new();
     let var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &cat_key], &deps. storage);
     for idx in start..end {
+        let layer_id = StoredLayerId {
+            category: cat_idx,
+            variant: idx,
+        };
+        // see if this variant requires other layer variants
+        let includes = if let Some(dep) = depends.iter().find(|d| d.id == layer_id) {
+            dep.correlated.iter().map(|l| l.to_display(&deps.storage)).collect::<StdResult<Vec<LayerId>>>()?
+        } else {
+            Vec::new()
+        };
+        // see if this variant hides other layer variants
+        let hides_at_launch = if let Some(dep) = hiders.iter().find(|d| d.id == layer_id) {
+            dep.correlated.iter().map(|l| l.to_display(&deps.storage)).collect::<StdResult<Vec<LayerId>>>()?
+        } else {
+            Vec::new()
+        };
         let var: Variant = may_load(&var_store, &idx.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Variant storage is corrupt"))?;
-        let var_inf = VariantInfo {
-            name: var.name,
-            svg: var.svg.filter(|_| svgs),
-            jawed_weight
-        }
-        let may_contr: Option<StoreContractInfo> = may_load(&contr_store, &idx.to_le_bytes())?;
-        if let Some(c) = may_contr {
-            nft_contracts.push(c.into_humanized(&deps.api)?);
-        }
+        let var_inf = VariantInfoPlus {
+            index: idx,
+            variant_info: VariantInfo {
+                name: var.name,
+                svg: var.svg.filter(|_| svgs),
+                jawed_weight: *cat.jawed_weights.get(idx as usize).ok_or_else(|| StdError::generic_err("Jawed weight table is corrupt"))?,
+                jawless_weight: cat.jawless_weights.as_ref().map(|w| w.get(idx as usize).cloned().ok_or_else(|| StdError::generic_err("Jawless weight table is corrupt"))).transpose()?,
+            },
+            includes,
+            hides_at_launch,
+        };
+        variants.push(var_inf);
     }
-
-    to_binary(&QueryAnswer::AllNftContracts {
-        contract_count: state.contract_cnt,
-        nft_contracts,
+    let forced_cyclops = cat.forced_cyclops.map(|u| {
+        may_load::<Variant, _>(&var_store, &u.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Variant storage is corrupt")).map(|v| v.name)
+    }).transpose()?;
+    let forced_jawless = cat.forced_jawless.map(|u| {
+        may_load::<Variant, _>(&var_store, &u.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Variant storage is corrupt")).map(|v| v.name)
+    }).transpose()?;
+    to_binary(&QueryAnswer::Category {
+        category_count,
+        index: cat_idx,
+        name: cat.name,
+        forced_cyclops,
+        forced_jawless,
+        variant_count,
+        variants,
     })
 }
 
-/// Returns QueryResult displaying information about all templates
-///
-/// # Arguments
-///
-/// * `deps` - reference to Extern containing all the contract's external dependencies
-/// * `viewer` - optional address and key making an authenticated query request
-/// * `permit` - optional permit with "owner" permission
-/// * `page` - optional page to display
-/// * `page_size` - optional number of templates to display
-fn query_templates<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-    viewer: Option<ViewerInfo>,
-    permit: Option<Permit>,
-    page: Option<u16>,
-    page_size: Option<u16>,
-) -> QueryResult {
-    // only allow admins to do this
-    let (_, may_addr) = check_admin(deps, viewer, permit)?;
-    let my_addr_raw = may_addr.map_or_else(
-        || {
-            may_load::<CanonicalAddr, _>(&deps.storage, MY_ADDRESS_KEY)?
-                .ok_or_else(|| StdError::generic_err("Minter contract address storage is corrupt"))
-        },
-        Ok,
-    )?;
-    let my_addr = deps.api.human_address(&my_addr_raw)?;
-    let viewing_key: String = may_load(&deps.storage, MY_VIEWING_KEY)?
-        .ok_or_else(|| StdError::generic_err("Minter contract's viewing key storage is corrupt"))?;
-    let viewer = ViewerInfo {
-        address: my_addr,
-        viewing_key,
-    };
-    let page = page.unwrap_or(0);
-    let limit = page_size.unwrap_or(30);
-    let start = page * limit;
-    let state: State = load(&deps.storage, STATE_KEY)?;
-    let end = min(start + limit, state.template_cnt);
-    let mut templates: Vec<TemplateInfo> = Vec::new();
-    let mut cache: Vec<MintAuthCache> = Vec::new();
-    let templ_store = ReadonlyPrefixedStorage::new(PREFIX_TEMPLATE, &deps.storage);
-    for idx in start..end {
-        let may_templ: Option<StoredTemplate> = may_load(&templ_store, &idx.to_le_bytes())?;
-        if let Some(t) = may_templ {
-            templates.push(t.into_humanized(deps, &mut cache, viewer.clone())?);
-        }
-    }
-
-    to_binary(&QueryAnswer::AllTemplates {
-        template_count: state.template_cnt,
-        templates,
-    })
-}
-
-/// Returns QueryResult displaying public information about the next nfts the specified
-/// templates will mint
-///
-/// # Arguments
-///
-/// * `deps` - reference to Extern containing all the contract's external dependencies
-/// * `template_names` - optional list of template names to view
-/// * `page` - optional page to display
-/// * `page_size` - optional number of templates to display
-fn query_pub_desc<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-    template_names: Option<Vec<String>>,
-    page: Option<u16>,
-    page_size: Option<u16>,
-) -> QueryResult {
-    let idxs = get_idxs(&deps.storage, template_names)?;
-    let count = idxs.len() as u16;
-    let page = page.unwrap_or(0);
-    let limit = page_size.unwrap_or(30);
-    let skip = page * limit;
-    let paged = idxs
-        .into_iter()
-        .skip(skip as usize)
-        .take(limit as usize)
-        .collect::<Vec<u16>>();
-    let nft_infos = get_pub_desc(deps, &paged)?;
-    to_binary(&QueryAnswer::PublicDescriptionOfNfts { count, nft_infos })
-}
-
-/// Returns QueryResult displaying public information about the next nft the specified
-/// template will mint
-///
-/// # Arguments
-///
-/// * `deps` - reference to Extern containing all the contract's external dependencies
-/// * `option_id` - template name to view
-fn query_listing_disp<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-    option_id: String,
-) -> QueryResult {
-    let idx = get_idxs(&deps.storage, Some(vec![option_id]))?;
-    let pub_desc = get_pub_desc(deps, &idx)?
-        .pop()
-        .ok_or_else(|| StdError::generic_err("Failed to retrieve the NFT listing info"))?;
-    to_binary(&QueryAnswer::NftListingDisplay {
-        nft_info: pub_desc.nft_info,
-        nft_contract_address: pub_desc.nft_contract_address,
-        mintable: pub_desc.mintable,
-    })
-}
-
-/// Returns QueryResult displaying information about a single template
-///
-/// # Arguments
-///
-/// * `deps` - reference to Extern containing all the contract's external dependencies
-/// * `viewer` - optional address and key making an authenticated query request
-/// * `permit` - optional permit with "owner" permission
-/// * `template_name` - String slice of the template name to view
-fn query_template<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-    viewer: Option<ViewerInfo>,
-    permit: Option<Permit>,
-    template_name: &str,
-) -> QueryResult {
-    // only allow admins to do this
-    let (_, may_addr) = check_admin(deps, viewer, permit)?;
-    let my_addr_raw = may_addr.map_or_else(
-        || {
-            may_load::<CanonicalAddr, _>(&deps.storage, MY_ADDRESS_KEY)?
-                .ok_or_else(|| StdError::generic_err("Minter contract address storage is corrupt"))
-        },
-        Ok,
-    )?;
-    let my_addr = deps.api.human_address(&my_addr_raw)?;
-    let viewing_key: String = may_load(&deps.storage, MY_VIEWING_KEY)?
-        .ok_or_else(|| StdError::generic_err("Minter contract's viewing key storage is corrupt"))?;
-    let viewer = ViewerInfo {
-        address: my_addr,
-        viewing_key,
-    };
-    let name_key = template_name.as_bytes();
-    let map_store = ReadonlyPrefixedStorage::new(PREFIX_TEMPLATE_MAP, &deps.storage);
-    let idx: u16 = may_load(&map_store, name_key)?.ok_or_else(|| {
-        StdError::generic_err(format!("Unknown template name: {}", template_name))
-    })?;
-    let idx_key = idx.to_le_bytes();
-    let templ_store = ReadonlyPrefixedStorage::new(PREFIX_TEMPLATE, &deps.storage);
-    let template: StoredTemplate = may_load(&templ_store, &idx_key)?
-        .ok_or_else(|| StdError::generic_err("Template storage is corrupt"))?;
-
-    to_binary(&QueryAnswer::Template {
-        template: template.into_humanized(deps, &mut Vec::new(), viewer)?,
-    })
-}
-
-/// Returns QueryResult displaying the admin list
+/// Returns QueryResult displaying the admin, minter, and viewer lists
 ///
 /// # Arguments
 ///
@@ -859,288 +1057,39 @@ fn query_addresses<S: Storage, A: Api, Q: Querier>(
     })
 }
 
-// nft contract info used for public descriptions
-#[derive(Clone)]
-pub struct ContractMintInfo {
-    // nft contract address
-    pub address: HumanAddr,
-    // collection creator
-    pub creator: Option<HumanAddr>,
-    // default royalty info
-    pub default_royalty: Option<DisplayRoyaltyInfo>,
-    // true if minting contract is authorized to mint on this nft contract
-    pub minting_authorized: bool,
-}
-
-// ContractMintInfo cache entry
-pub struct MintInfoCache {
-    // nft contract index
-    pub index: u16,
-    // contract minting info
-    pub info: ContractMintInfo,
-}
-
-/// Returns StdResult<Vec<PublicDescription>> listing the public descriptions of the next
-/// nfts the templates will mint
+/// Returns QueryResult displaying the metadata common to all NFTs
 ///
 /// # Arguments
 ///
 /// * `deps` - reference to Extern containing all the contract's external dependencies
-/// * `idxs` - list of template indices to check
-fn get_pub_desc<S: Storage, A: Api, Q: Querier>(
+/// * `viewer` - optional address and key making an authenticated query request
+/// * `permit` - optional permit with "owner" permission
+fn query_common_metadata<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
-    idxs: &[u16],
-) -> StdResult<Vec<PublicDescription>> {
-    let my_addr_raw: CanonicalAddr = may_load(&deps.storage, MY_ADDRESS_KEY)?
-        .ok_or_else(|| StdError::generic_err("Minter contract address storage is corrupt"))?;
-    let token_creator = deps.api.human_address(&my_addr_raw)?;
-    let mut cache: Vec<MintInfoCache> = Vec::new();
-    let mut descs: Vec<PublicDescription> = Vec::new();
-    let templ_store = ReadonlyPrefixedStorage::new(PREFIX_TEMPLATE, &deps.storage);
-    let contr_store = ReadonlyPrefixedStorage::new(PREFIX_CONTRACT, &deps.storage);
-    for idx in idxs.iter() {
-        let template: StoredTemplate = may_load(&templ_store, &idx.to_le_bytes())?
-            .ok_or_else(|| StdError::generic_err("Template storage is corrupt"))?;
-        // if already saw this nft contract, pull the info from the cache
-        let contr_info = if let Some(inf) =
-            cache.iter().find(|c| c.index == template.nft_contract_idx)
-        {
-            inf.info.clone()
-        // unseen nft contract
-        } else {
-            // get contract info
-            let nft_raw: StoreContractInfo =
-                may_load(&contr_store, &template.nft_contract_idx.to_le_bytes())?
-                    .ok_or_else(|| StdError::generic_err("NFT contract info storage is corrupt"))?;
-            let (nft_contract, creator) = nft_raw.into_humanized_plus(&deps.api)?;
-            // get default royalty info
-            let def_query_msg = Snip721QueryMsg::RoyaltyInfo { viewer: None };
-            let resp: StdResult<RoyaltyInfoWrapper> = def_query_msg.query(
-                &deps.querier,
-                nft_contract.code_hash.clone(),
-                nft_contract.address.clone(),
-            );
-            let default = resp.unwrap_or(RoyaltyInfoWrapper {
-                royalty_info: RoyaltyInfoResponse { royalty_info: None },
-            });
-            // check if this contract has minting authority
-            let minters_query_msg = Snip721QueryMsg::Minters {};
-            let minters_resp: MintersResponse = minters_query_msg.query(
-                &deps.querier,
-                nft_contract.code_hash,
-                nft_contract.address.clone(),
-            )?;
-            let inf = ContractMintInfo {
-                address: nft_contract.address,
-                creator,
-                default_royalty: default.royalty_info.royalty_info,
-                minting_authorized: minters_resp.minters.minters.contains(&token_creator),
-            };
-            cache.push(MintInfoCache {
-                index: template.nft_contract_idx,
-                info: inf.clone(),
-            });
-            inf
-        };
-        let mintable = template
-            .minting_limit
-            .map_or(true, |l| template.next_serial <= l)
-            && contr_info.minting_authorized;
-        let royalty_info = if let Some(r) = template.royalty_info {
-            Some(r.to_display(&deps.api, true)?)
-        } else {
-            contr_info.default_royalty
-        };
-        let nft_info = NftDossierForListing {
-            public_metadata: template.public_metadata,
-            royalty_info,
-            mint_run_info: MintRunInfo {
-                collection_creator: contr_info.creator,
-                token_creator: token_creator.clone(),
-                time_of_minting: None,
-                mint_run: template.mint_run,
-                serial_number: template.next_serial,
-                quantity_minted_this_run: template.minting_limit,
-            },
-        };
-        descs.push(PublicDescription {
-            template_name: template.name,
-            nft_info,
-            nft_contract_address: contr_info.address,
-            mintable,
-        });
-    }
-    Ok(descs)
-}
-
-/// Returns StdResult<Vec<u16>>
-///
-/// returns a list of template indexes corresponding to the optionally specified list of
-/// template names
-///
-/// # Arguments
-///
-/// * `storage` - a reference to the contract's storage
-/// * `template_names` - optional list of template names to view
-fn get_idxs<S: ReadonlyStorage>(
-    storage: &S,
-    template_names: Option<Vec<String>>,
-) -> StdResult<Vec<u16>> {
-    let state: State = load(storage, STATE_KEY)?;
-    template_names.map_or_else(
-        || Ok((0..state.template_cnt).collect::<Vec<u16>>()),
-        |l| {
-            if l.is_empty() {
-                Ok((0..state.template_cnt).collect::<Vec<u16>>())
-            } else {
-                let map_store = ReadonlyPrefixedStorage::new(PREFIX_TEMPLATE_MAP, storage);
-                l.iter()
-                    .map(|n| {
-                        may_load::<u16, _>(&map_store, n.as_bytes())?.ok_or_else(|| {
-                            StdError::generic_err(format!("Unknown template name: {}", n))
-                        })
-                    })
-                    .collect::<StdResult<Vec<u16>>>()
+    viewer: Option<ViewerInfo>,
+    permit: Option<Permit>,
+) -> QueryResult {
+    // only allow authorized addresses to do this
+    let (querier, _) = get_querier(deps, viewer, permit)?;
+    let minters: Vec<CanonicalAddr> = may_load(&deps.storage, MINTERS_KEY)?.unwrap_or_else(Vec::new);
+    if !minters.contains(&querier) {
+        let viewers: Vec<CanonicalAddr> = may_load(&deps.storage, VIEWERS_KEY)?.unwrap_or_else(Vec::new);
+        if !viewers.contains(&querier) {
+            let admins: Vec<CanonicalAddr> = load(&deps.storage, ADMINS_KEY)?;
+            if !admins.contains(&querier) {
+                return Err(StdError::unauthorized());
             }
-        },
-    )
-}
-
-/// Returns StdResult<(Option<HumanAddr>, Option<CosmosMsg>)>
-///
-/// stores a new nft template and returns its nft contract's address and SetViewingKey msg if
-/// it is a new nft contract
-///
-/// # Arguments
-///
-/// * `deps` - mutable reference to Extern containing all the contract's external dependencies
-/// * `state` - a mutable reference to the contract State
-/// * `template` - the new nft Template
-fn add_template<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    state: &mut State,
-    template: Template,
-) -> StdResult<(Option<HumanAddr>, Option<CosmosMsg>)> {
-    let name_key = template.name.as_bytes();
-    let mut map_store = PrefixedStorage::new(PREFIX_TEMPLATE_MAP, &mut deps.storage);
-    if may_load::<u16, _>(&map_store, name_key)?.is_none() {
-        if let Some(pub_meta) = template.public_metadata.as_ref() {
-            enforce_metadata_field_exclusion(pub_meta)?;
         }
-        if let Some(priv_meta) = template.private_metadata.as_ref() {
-            enforce_metadata_field_exclusion(priv_meta)?;
-        }
-        let idx = state.template_cnt;
-        save(&mut map_store, name_key, &idx)?;
-        state.template_cnt = state.template_cnt.checked_add(1).ok_or_else(|| {
-            StdError::generic_err("Reached the implementation limit for the number of templates")
-        })?;
-        let (nft_contract_idx, human, msg) =
-            process_stored_contract_info(deps, state, template.nft_contract)?;
-        let stored = StoredTemplate {
-            name: template.name,
-            public_metadata: template.public_metadata,
-            private_metadata: template.private_metadata,
-            royalty_info: template
-                .royalty_info
-                .map(|r| r.get_stored(&deps.api))
-                .transpose()?,
-            mint_run: 1,
-            next_serial: 1,
-            minting_limit: template.minting_limit,
-            nft_contract_idx,
-        };
-        let mut templ_store = PrefixedStorage::new(PREFIX_TEMPLATE, &mut deps.storage);
-        save(&mut templ_store, &idx.to_le_bytes(), &stored)?;
-        return Ok((human, msg));
     }
-    Err(StdError::generic_err(
-        "There is already a template with that name",
-    ))
-}
+    let common: CommonMetadata = may_load(&deps.storage, METADATA_KEY)?.unwrap_or(CommonMetadata {
+        public: None,
+        private: None,
+    });
 
-/// Returns StdResult<(u16, Option<HumanAddr>, Option<CosmosMsg>)>
-///
-/// gets the index, address, and possible SetViewingKey msg of an optional ContractInfo, returning 0
-/// as the default (the first ContractInfo provided), and creating, storing, and setting a viewing key
-/// with a new one if needed
-///
-/// # Arguments
-///
-/// * `deps` - mutable reference to Extern containing all the contract's external dependencies
-/// * `state` - a mutable reference to the contract State
-/// * `contract` - the optional ContractInfo whose matching StoreContractInfo and index should be returned
-fn process_stored_contract_info<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    state: &mut State,
-    contract: Option<ContractInfo>,
-) -> StdResult<(u16, Option<HumanAddr>, Option<CosmosMsg>)> {
-    // if a ContractInfo was given, get its index or save it if it is new
-    if let Some(contr) = contract {
-        let mut supplied = contr.get_store(&deps.api)?;
-        let contr_key = supplied.address.as_slice();
-        let mut map_store = PrefixedStorage::new(PREFIX_CONTRACT_MAP, &mut deps.storage);
-        let (idx, msg) = if let Some(i) = may_load::<u16, _>(&map_store, contr_key)? {
-            (i, None)
-        } else {
-            let i = state.contract_cnt;
-            state.contract_cnt = state.contract_cnt.checked_add(1).ok_or_else(|| {
-                StdError::generic_err(
-                    "Reached the implementation limit for the number of nft contracts",
-                )
-            })?;
-            save(&mut map_store, contr_key, &i)?;
-            let query_msg = Snip721QueryMsg::ContractCreator {};
-            let resp: StdResult<Snip721ContractCreatorResponse> =
-                query_msg.query(&deps.querier, contr.code_hash, contr.address.clone());
-            supplied.creator = resp
-                .ok()
-                .map(|r| {
-                    r.contract_creator
-                        .creator
-                        .map(|c| deps.api.canonical_address(&c))
-                })
-                .flatten()
-                .transpose()?;
-            let mut contr_store = PrefixedStorage::new(PREFIX_CONTRACT, &mut deps.storage);
-            save(&mut contr_store, &i.to_le_bytes(), &supplied)?;
-            let key: String = may_load(&deps.storage, MY_VIEWING_KEY)?.ok_or_else(|| {
-                StdError::generic_err("Minter contract's viewing key storage is corrupt")
-            })?;
-            let message = Snip721HandleMsg::SetViewingKey { key }.to_cosmos_msg(
-                supplied.code_hash,
-                contr.address.clone(),
-                None,
-            )?;
-            (i, Some(message))
-        };
-        Ok((idx, Some(contr.address), msg))
-    // if a ContractInfo was not given, default to using the first nft contract
-    } else {
-        // if the contract does not have any nft contracts to use
-        if state.contract_cnt == 0 {
-            return Err(StdError::generic_err(
-                "You can not create a template until you have provided at least one NFT contract",
-            ));
-        }
-        Ok((0, None, None))
-    }
-}
-
-/// Returns StdResult<()>
-///
-/// makes sure that Metadata does not have both `token_uri` and `extension`
-///
-/// # Arguments
-///
-/// * `metadata` - a reference to Metadata
-fn enforce_metadata_field_exclusion(metadata: &Metadata) -> StdResult<()> {
-    if metadata.token_uri.is_some() && metadata.extension.is_some() {
-        return Err(StdError::generic_err(
-            "Metadata can not have BOTH token_uri AND extension",
-        ));
-    }
-    Ok(())
+    to_binary(&QueryAnswer::CommonMetadata {
+        public_metadata: common.public,
+        private_metadata: common.private,
+    })
 }
 
 /// Returns StdResult<(CanonicalAddr, Option<CanonicalAddr>)> from determining the querying address
@@ -1347,6 +1296,7 @@ fn remove_addrs_from_auth<A: Api>(
 /// * `forced_cyclops` - optional variant name that cyclops have to use
 /// * `forced_jawless` - optional variant name that jawless have to use
 /// * `cat_name` - name of this trait category
+#[allow(clippy::too_many_arguments)]
 fn add_variants<S: Storage>(
     storage: &mut S,
     cat_key: &[u8],
@@ -1363,45 +1313,43 @@ fn add_variants<S: Storage>(
     for var_inf in variants.into_iter() {
         if let Some(cycl) = forced_cyclops.as_deref() {
             if cycl == var_inf.name {
-                cyclops_idx.insert(var_cnt);
+                cyclops_idx = Some(var_cnt);
                 forced_cyclops = None;
             }
         }
         if let Some(jwl) = forced_jawless.as_deref() {
             if jwl == var_inf.name {
-                jawless_idx.insert(var_cnt);
+                jawless_idx = Some(var_cnt);
                 forced_jawless = None;
             }
-        }
-        let var_name_key = var_inf.name.as_bytes();
-        let mut var_map = PrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &cat_key], storage);
-        if may_load::<u8, _>(&var_map, var_name_key)?.is_some() {
-            return Err(StdError::generic_err(format!("Variant name:  {} already exists under category:  {}", var_inf.name, cat_name)));
         }
         let var = Variant {
             name: var_inf.name,
             svg: var_inf.svg,
         };
+        let var_name_key = var.name.as_bytes();
+        let mut var_map = PrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, cat_key], storage);
+        if may_load::<u8, _>(&var_map, var_name_key)?.is_some() {
+            return Err(StdError::generic_err(format!("Variant name:  {} already exists under category:  {}", &var.name, &cat_name)));
+        }
         jawed_weights.push(var_inf.jawed_weight);
         // if this is the first variant
         if var_cnt == 0 {
             if let Some(jawless) = var_inf.jawless_weight {
-                jawless_weights.insert(vec![jawless]);
+                let _ = jawless_weights.insert(vec![jawless]);
             }
         // already have variants
-        } else {
-            if let Some(jawless) = var_inf.jawless_weight {
-                // can't add a jawless weight to a category that does not have them already
-                jawless_weights.as_mut().ok_or_else(|| StdError::generic_err(format!("Category:  {} does not have jawless weights, but variant {} does", cat_name, var_inf.name)))?.push(jawless);
-            } else if jawless_weights.is_some() {
-                // must provide a jawless weight for a category that has them
-                return Err(StdError::generic_err(format!("Category:  {} has jawless weights, but variant {} does not", cat_name, var_inf.name)));
-            }
+        } else if let Some(jawless) = var_inf.jawless_weight {
+            // can't add a jawless weight to a category that does not have them already
+            jawless_weights.as_mut().ok_or_else(|| StdError::generic_err(format!("Category:  {} does not have jawless weights, but variant {} does", &cat_name, &var.name)))?.push(jawless);
+        } else if jawless_weights.is_some() {
+            // must provide a jawless weight for a category that has them
+            return Err(StdError::generic_err(format!("Category:  {} has jawless weights, but variant {} does not", &cat_name, &var.name)));
         }
         save(&mut var_map, var_name_key, &var_cnt)?;
-        let mut var_store = PrefixedStorage::multilevel(&[PREFIX_VARIANT, &cat_key], storage);
+        let mut var_store = PrefixedStorage::multilevel(&[PREFIX_VARIANT, cat_key], storage);
         save(&mut var_store, &var_cnt.to_le_bytes(), &var)?;
-        var_cnt = var_cnt.checked_add(1).ok_or_else(|| StdError::generic_err(format!("Reached maximum number of variants for category: {}", cat_name)))?;
+        var_cnt = var_cnt.checked_add(1).ok_or_else(|| StdError::generic_err(format!("Reached maximum number of variants for category: {}", &cat_name)))?;
     }
     // if never found the forced cyclops variant
     if let Some(cycl) = forced_cyclops {
@@ -1412,4 +1360,214 @@ fn add_variants<S: Storage>(
         return Err(StdError::generic_err(format!("Forced jawless variant {} does not exist", jwl)));
     }
     Ok((cyclops_idx, jawless_idx))
+}
+
+/// Returns StdResult<Option<Metadata>>
+///
+/// filter metadata to error if both token_uri and extension are present, or to be
+/// None if neither are present
+///
+/// # Arguments
+///
+/// * `metadata` - Metadata being screened
+fn filter_metadata(metadata: Metadata) -> StdResult<Option<Metadata>> {
+    let has_uri = metadata.token_uri.is_some();
+    let has_xten = metadata.extension.is_some();
+    // if you have both or have neither
+    let new_meta = if has_uri == has_xten {
+        // if both
+        if has_uri {
+            return Err(StdError::generic_err(
+                "Metadata can not have BOTH token_uri AND extension",
+            ));
+        }
+        // delete the existing if all fields are None
+        None
+    } else {
+        Some(metadata)
+    };
+    Ok(new_meta)
+}
+
+/// Returns StdResult<()>
+///
+/// adds new dependencies to the specified list
+///
+/// # Arguments
+///
+/// * `storage` - a mutable reference to contract storage
+/// * `dependencies` - list of new dependencies
+/// * `key` - key for the dependency list to update
+fn add_dependencies<S: Storage>(
+    storage: &mut S,
+    dependencies: &[Dependencies],
+    key: &[u8],
+) -> StdResult<()> {
+    let mut depends: Vec<StoredDependencies> = may_load(storage, key)?.unwrap_or_else(Vec::new);
+    for dep in dependencies.iter() {
+        let stored = dep.to_stored(storage)?;
+        // add if this variant does not already have dependencies
+        if !depends.iter().any(|d| d.id == stored.id) {
+            depends.push(stored);
+        }
+    }
+    save(storage, key, &depends)
+}
+
+/// Returns HandleResult
+///
+/// removes dependencies from the specified list
+///
+/// # Arguments
+///
+/// * `storage` - a mutable reference to contract storage
+/// * `dependencies` - list of dependencies to remove
+/// * `key` - key for the dependency list to update
+fn remove_dependencies<S: Storage>(
+    storage: &mut S,
+    dependencies: &[Dependencies],
+    key: &[u8],
+) -> StdResult<()> {
+    if let Some(mut depends) = may_load::<Vec<StoredDependencies>, _>(storage, key)? {
+        let old_len = depends.len();
+        let rem_list = dependencies
+            .iter()
+            .map(|d| d.to_stored(storage))
+            .collect::<StdResult<Vec<StoredDependencies>>>()?;
+        depends.retain(|d| !rem_list.iter().any(|r| r.id == d.id));
+        // only save if the list changed
+        if old_len != depends.len() {
+            save(storage, key, &depends)?;
+        }
+    }
+    Ok(())
+}
+
+/// Returns HandleResult
+///
+/// modifies existing dependencies in the specified list
+///
+/// # Arguments
+///
+/// * `storage` - a mutable reference to contract storage
+/// * `dependencies` - list of dependencies to modify
+/// * `key` - key for the dependency list to update
+fn modify_dependencies<S: Storage>(
+    storage: &mut S,
+    dependencies: &[Dependencies],
+    key: &[u8],
+) -> StdResult<()> {
+    let mut depends: Vec<StoredDependencies> = may_load(storage, key)?.unwrap_or_else(Vec::new);
+    let mut save_dep = false;
+    for dep in dependencies.iter() {
+        let stored = dep.to_stored(storage)?;
+        let existing = depends.iter_mut().find(|d| d.id == stored.id);
+        if let Some(update) = existing {
+            *update = stored;
+            save_dep = true;
+        } else {
+            return Err(StdError::generic_err(format!("No existing dependencies for Variant: {} in Category: {}", dep.id.variant, dep.id.category)));
+        }
+    }
+    if save_dep {
+        save(storage, key, &depends)?;
+    }
+    Ok(())
+}
+
+pub enum Action {
+    Add,
+    Remove,
+    Modify,
+}
+
+/// Returns HandleResult
+///
+/// updates the required and hiding dependencies lists
+///
+/// # Arguments
+///
+/// * `deps` - a mutable reference to Extern containing all the contract's external dependencies
+/// * `sender` - a reference to the message sender
+/// * `update_list` - list of dependencies to use for update
+/// * `action` - Action to perform on the dependency list
+/// * `is_required` - true if the dependencies list being updated is the one for requirements
+fn try_process_dep_list<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    sender: &HumanAddr,
+    update_list: &[Dependencies],
+    action: Action,
+    is_required: bool,
+) -> HandleResult {
+    // only allow admins to do this
+    let admins: Vec<CanonicalAddr> = load(&deps.storage, ADMINS_KEY)?;
+    let sender_raw = deps.api.canonical_address(sender)?;
+    if !admins.contains(&sender_raw) {
+        return Err(StdError::unauthorized());
+    }
+    let key = if is_required {
+        DEPENDENCIES_KEY
+    } else {
+        HIDERS_KEY
+    };
+    let status = "success".to_string();
+    let resp = match action {
+        Action::Add => { 
+            add_dependencies(&mut deps.storage, update_list, key)?;
+            if is_required {
+                HandleAnswer::AddDependencies { status }
+            } else {
+                HandleAnswer::AddHiders { status }
+            }
+        },
+        Action::Remove => {
+            remove_dependencies(&mut deps.storage, update_list, key)?;
+            if is_required {
+                HandleAnswer::RemoveDependencies { status }
+            } else {
+                HandleAnswer::RemoveHiders { status }
+            }
+        },
+        Action::Modify => {
+            modify_dependencies(&mut deps.storage, update_list, key)?;
+            if is_required {
+                HandleAnswer::ModifyDependencies { status }
+            } else {
+                HandleAnswer::ModifyHiders { status }
+            }
+        },
+    };
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![],
+        data: Some(to_binary(&resp)?),
+    })
+}
+
+/// Returns HandleResult
+///
+/// picks a random winner out of a weight table
+///
+/// # Arguments
+///
+/// * `prng` - a mutable reference to the prng
+/// * `weights` - weight table
+fn draw_variant(
+    prng: &mut Prng,
+    weights: &[u16],
+) -> u8 {
+    let total_weight: u16 = weights.iter().sum();
+    let rdm = u64::from_be_bytes(prng.eight_bytes());
+    let winning_num: u16 = (rdm % total_weight as u64) as u16;
+    let mut tally = 0u16;
+    let mut winner = 0u8;
+    for (idx, weight) in weights.iter().enumerate() {
+        // if the sum didn't panic on overflow, it can't happen here
+        tally += weight;
+        if tally > winning_num {
+            winner = idx as u8;
+            break;
+        }
+    }
+    winner
 }

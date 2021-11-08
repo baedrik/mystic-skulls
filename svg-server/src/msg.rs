@@ -1,7 +1,9 @@
 #![allow(clippy::large_enum_variant)]
-use crate::contract_info::ContractInfo;
 use crate::metadata::{Metadata};
-use cosmwasm_std::{HumanAddr};
+use crate::state::{StoredDependencies, Category, Variant, PREFIX_CATEGORY_MAP, PREFIX_CATEGORY, PREFIX_VARIANT_MAP, PREFIX_VARIANT};
+use crate::storage::{may_load};
+use cosmwasm_std::{HumanAddr, ReadonlyStorage, StdError, StdResult};
+use cosmwasm_storage::{ReadonlyPrefixedStorage};
 use schemars::JsonSchema;
 use secret_toolkit::permit::Permit;
 use serde::{Deserialize, Serialize};
@@ -79,6 +81,44 @@ pub enum HandleMsg {
         /// common private metadata
         private_metadata: Option<Metadata>,
     },
+    /// Sets the layer categories to skip when rolling and which categories
+    /// must be rolled first instead of in layer order
+    SetRollConfig {
+        /// names of the layer categories to skip when rolling
+        skip: Vec<String>,
+        /// names of layers that must be rolled first
+        first: Vec<String>,
+    },
+    /// add dependencies for traits that have multiple layers
+    AddDependencies {
+        /// new dependencies to add
+        dependencies: Vec<Dependencies>,
+    },
+    /// remove dependecies from trait variants
+    RemoveDependencies {
+        /// dependencies to remove
+        dependencies: Vec<Dependencies>,
+    },
+    /// modify dependencies of a trait variant
+    ModifyDependencies {
+        /// dependencies to modify
+        dependencies: Vec<Dependencies>,
+    },
+    /// add launch trait variants that hide other trait variants
+    AddHiders {
+        /// new hiders to add
+        hiders: Vec<Dependencies>,
+    },
+    /// remove launch trait variants that hide other trait variants
+    RemoveHiders {
+        /// hiders to remove
+        hiders: Vec<Dependencies>,
+    },
+    /// modify launch trait variants that hide other trait variants
+    ModifyHiders {
+        /// hiders to modify
+        hiders: Vec<Dependencies>,
+    },
     /// allow a minter to add a gene to prevent a future duplicate
     AddGene { gene: Vec<u8> },
     /// disallow the use of a permit
@@ -122,6 +162,20 @@ pub enum HandleAnswer {
     ModifyVariants { status: String },
     /// response from setting common metadata
     SetMetadata { status: String },
+    /// response from setting the roll config
+    SetRollConfig { status: String },
+    /// response from adding dependencies
+    AddDependencies { status: String },
+    /// response from removing dependencies
+    RemoveDependencies { status: String },
+    /// response from modifying dependencies
+    ModifyDependencies { status: String },
+    /// response from adding trait hiders
+    AddHiders { status: String },
+    /// response from removing trait hiders
+    RemoveHiders { status: String },
+    /// response from modifying trait hiders
+    ModifyHiders { status: String },
     /// response from revoking a permit
     RevokePermit { status: String },
 }
@@ -156,59 +210,76 @@ pub enum QueryMsg {
         /// optionally true if svgs should be displayed.  Defaults to false
         display_svg: Option<bool>,
     },
-    /// view the info of one template
-    Template {
+    /// displays a layer variant
+    Variant {
         /// optional address and viewing key of an admin
         viewer: Option<ViewerInfo>,
         /// optional permit used to verify admin identity.  If both viewer and permit
         /// are provided, the viewer will be ignored
         permit: Option<Permit>,
-        /// name of the template to view
-        template_name: String,
+        /// optionally display by the category and variant names
+        by_name: Option<LayerId>,
+        /// optionally display by the category and variant indices
+        by_index: Option<StoredLayerId>,
+        /// optionally true if svgs should be displayed.  Defaults to false
+        display_svg: Option<bool>,
     },
-    /// view info of all templates
-    AllTemplates {
+    /// displays the common metadata
+    CommonMetadata {
+        /// optional address and viewing key of an admin, minter, or viewer
+        viewer: Option<ViewerInfo>,
+        /// optional permit used to verify identity.  If both viewer and permit
+        /// are provided, the viewer will be ignored
+        permit: Option<Permit>,
+    },
+    /// displays the layer categories that get skipped during rolls and the ones 
+    /// that must be rolled first (and total number of categories)
+    RollConfig {
+        /// optional address and viewing key of an admin, minter, or viewer
+        viewer: Option<ViewerInfo>,
+        /// optional permit used to verify identity.  If both viewer and permit
+        /// are provided, the viewer will be ignored
+        permit: Option<Permit>,
+    },
+    /// displays the trait variants with dependencies (multiple layers)
+    Dependencies {
         /// optional address and viewing key of an admin
         viewer: Option<ViewerInfo>,
         /// optional permit used to verify admin identity.  If both viewer and permit
         /// are provided, the viewer will be ignored
         permit: Option<Permit>,
-        /// optional page
-        page: Option<u16>,
-        /// optional max number of templates to display
-        page_size: Option<u16>,
+        /// optional dependency index to start at
+        start_at: Option<u16>,
+        /// max number of dependencies to display
+        limit: Option<u16>,
     },
-    /// view all the nft contracts this minter can use
-    AllNftContracts {
+    /// displays the launch trait variants that hide other trait variants
+    Hiders {
         /// optional address and viewing key of an admin
         viewer: Option<ViewerInfo>,
         /// optional permit used to verify admin identity.  If both viewer and permit
         /// are provided, the viewer will be ignored
         permit: Option<Permit>,
-        /// optional page
-        page: Option<u16>,
-        /// optional max number of templates to display
-        page_size: Option<u16>,
+        /// optional hider index to start at
+        start_at: Option<u16>,
+        /// max number of hiders to display
+        limit: Option<u16>,
     },
-    /// display the public info of the next tokens that would be minted from the specified templates.
-    /// If no template names are provided, display info from all templates
-    PublicDescriptionOfNfts {
-        /// templates whose info should be displayed
-        template_names: Option<Vec<String>>,
-        /// optional page
-        page: Option<u16>,
-        /// optional max number of templates to display
-        page_size: Option<u16>,
+    /// creates a new and unique genetic image.  This can only be called by an authorized minter
+    NewGene {
+        /// address and viewing key of a minting contract
+        viewer: ViewerInfo,
+        /// current block height
+        height: u64,
+        /// current block time
+        time: u64,
+        /// sender of the mint tx
+        sender: HumanAddr,
+        /// entropy for randomization
+        entropy: String,
+        /// the name of the background layer variant to use
+        background: String,
     },
-    /// display the public info of the next token to be minted from a specified
-    /// option ID (template).  This is used for a universal minter query that
-    /// listings will use
-    NftListingDisplay {
-        /// minting option that would be called upon purchase
-        option_id: String,
-    },
-    // TODO
-    // maybe add previous mint run quantities to template queries
 }
 
 /// responses to queries
@@ -227,10 +298,59 @@ pub enum QueryAnswer {
         category_count: u8,
         /// this category's index
         index: u8,
+        /// trait category name
+        name: String,
+        /// forced variant for cyclops
+        forced_cyclops: Option<String>,
+        /// forced variant if jawless
+        forced_jawless: Option<String>,
         /// number of variants in this category
         variant_count: u8,
-        category: CategoryInfo,
-    }
+        /// paginated variants for this category
+        variants: Vec<VariantInfoPlus>,
+    },
+    /// display a layer variant
+    Variant {
+        /// the index of the category this variant belongs to
+        category_index: u8,
+        /// all the variant info
+        info: VariantInfoPlus,
+    },
+    /// display the common metadata
+    CommonMetadata {
+        public_metadata: Option<Metadata>,
+        private_metadata: Option<Metadata>,
+    },
+    /// displays the layer categories that get skipped during rolls and the ones 
+    /// that must be rolled first (and total number of categories)
+    RollConfig {
+        /// number of categories
+        category_count: u8,
+        /// the categories that get skipped
+        skip: Vec<String>,
+        /// the categories that must be rolled first
+        first: Vec<String>,
+    },
+    /// displays the trait variants with dependencies (multiple layers)
+    Dependencies {
+        /// number of dependencies
+        count: u16,
+        dependencies: Vec<Dependencies>,
+    },
+    /// displays the launch trait variants that hide other trait variants
+    Hiders {
+        /// number of hiders
+        count: u16,
+        hiders: Vec<Dependencies>,
+    },
+    /// response from creating a new genetic image
+    NewGene {
+        current_image: Vec<u8>,
+        /// complete genetic image
+        genetic_image: Vec<u8>,
+        /// image used for uniqueness checks
+        unique_check: Vec<u8>,
+    },
 }
 
 /// trait variant information
@@ -244,6 +364,19 @@ pub struct VariantInfo {
     pub jawed_weight: u16,
     /// randomization weight for this variant if jawless
     pub jawless_weight: Option<u16>,
+}
+
+/// trait variant information with its index and dependencies
+#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug)]
+pub struct VariantInfoPlus {
+    /// index of variant
+    pub index: u8,
+    /// variant info
+    pub variant_info: VariantInfo,
+    /// layer variants it includes
+    pub includes: Vec<LayerId>,
+    /// trait variants it hides at launch
+    pub hides_at_launch: Vec<LayerId>,
 }
 
 /// trait category information
@@ -302,4 +435,82 @@ pub struct ViewerInfo {
     pub address: HumanAddr,
     /// authentication key string
     pub viewing_key: String,
+}
+
+/// describes a trait that has multiple layers
+#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug)]
+pub struct Dependencies {
+    /// id of the layer variant that has dependencies
+    pub id: LayerId,
+    /// the other layers that are correlated to this variant
+    pub correlated: Vec<LayerId>,
+}
+
+impl Dependencies {
+    /// Returns StdResult<StoredDependencies> from creating a StoredDependencies from a Dependencies
+    ///
+    /// # Arguments
+    ///
+    /// * `storage` - a reference to the contract storage
+    pub fn to_stored<S: ReadonlyStorage>(&self, storage: &S) -> StdResult<StoredDependencies> {
+        Ok(StoredDependencies {
+            id: self.id.to_stored(storage)?,
+            correlated: self.correlated.iter().map(|l| l.to_stored(storage)).collect::<StdResult<Vec<StoredLayerId>>>()?,
+        })
+    }
+}
+
+/// identifies a layer
+#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug)]
+pub struct LayerId {
+    /// the layer category name
+    pub category: String,
+    /// the variant name
+    pub variant: String,
+}
+
+impl LayerId {
+    /// Returns StdResult<StoredLayerId> from creating a StoredLayerId from a LayerId
+    ///
+    /// # Arguments
+    ///
+    /// * `storage` - a reference to the contract storage
+    pub fn to_stored<S: ReadonlyStorage>(&self, storage: &S) -> StdResult<StoredLayerId> {
+        let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, storage);
+        let cat_idx: u8 = may_load(&cat_map, self.category.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Category name:  {} does not exist", &self.category)))?;
+        let var_map = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &cat_idx.to_le_bytes()], storage);
+        let var_idx: u8 = may_load(&var_map, self.variant.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Category {} does not have a variant named {}", &self.category, &self.variant)))?;
+
+        Ok(StoredLayerId {
+            category: cat_idx,
+            variant: var_idx,
+        })
+    }
+}
+
+/// identifies a layer
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct StoredLayerId {
+    /// the layer category
+    pub category: u8,
+    pub variant: u8,
+}
+
+impl StoredLayerId {
+    /// Returns StdResult<LayerId> from creating a LayerId from a StoredLayerId
+    ///
+    /// # Arguments
+    ///
+    /// * `storage` - a reference to the contract storage
+    pub fn to_display<S: ReadonlyStorage>(&self, storage: &S) -> StdResult<LayerId> {
+        let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, storage);
+        let cat_key = self.category.to_le_bytes();
+        let cat: Category = may_load(&cat_store, &cat_key)?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
+        let var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &cat_key], storage);
+        let var: Variant = may_load(&var_store, &self.variant.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Variant storage is corrupt"))?;
+        Ok(LayerId {
+            category: cat.name,
+            variant: var.name,
+        })
+    }
 }

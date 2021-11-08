@@ -1,7 +1,7 @@
-use cosmwasm_std::Env;
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use sha2::{Digest, Sha256};
+use cosmwasm_std::HumanAddr;
 
 pub fn sha_256(data: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
@@ -40,15 +40,22 @@ impl Prng {
 
         bytes
     }
+
+    pub fn eight_bytes(&mut self) -> [u8; 8] {
+        let mut bytes = [0u8; 8];
+        self.rng.fill_bytes(&mut bytes);
+
+        bytes
+    }
 }
 
-pub fn extend_entropy(env: &Env, entropy: &[u8]) -> Vec<u8> {
+pub fn extend_entropy(height: u64, time: u64, sender: &HumanAddr, entropy: &[u8]) -> Vec<u8> {
     // 16 here represents the lengths in bytes of the block height and time.
-    let entropy_len = 16 + env.message.sender.len() + entropy.len();
+    let entropy_len = 16 + sender.len() + entropy.len();
     let mut rng_entropy = Vec::with_capacity(entropy_len);
-    rng_entropy.extend_from_slice(&env.block.height.to_be_bytes());
-    rng_entropy.extend_from_slice(&env.block.time.to_be_bytes());
-    rng_entropy.extend_from_slice(env.message.sender.0.as_bytes());
+    rng_entropy.extend_from_slice(&height.to_be_bytes());
+    rng_entropy.extend_from_slice(&time.to_be_bytes());
+    rng_entropy.extend_from_slice(sender.as_str().as_bytes());
     rng_entropy.extend_from_slice(entropy);
     rng_entropy
 }

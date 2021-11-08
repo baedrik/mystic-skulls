@@ -4,19 +4,33 @@
   "description": "responses to queries",
   "anyOf": [
     {
-      "description": "response listing the current admin addresses",
+      "description": "response listing the current authorized addresses",
       "type": "object",
       "required": [
-        "admins"
+        "authorized_addresses"
       ],
       "properties": {
-        "admins": {
+        "authorized_addresses": {
           "type": "object",
           "required": [
-            "admins"
+            "admins",
+            "minters",
+            "viewers"
           ],
           "properties": {
             "admins": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            },
+            "minters": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            },
+            "viewers": {
               "type": "array",
               "items": {
                 "$ref": "#/definitions/HumanAddr"
@@ -27,50 +41,63 @@
       }
     },
     {
-      "description": "displays the info of one template",
+      "description": "display a trait category",
       "type": "object",
       "required": [
-        "template"
+        "category"
       ],
       "properties": {
-        "template": {
+        "category": {
           "type": "object",
           "required": [
-            "template"
+            "category_count",
+            "index",
+            "name",
+            "variant_count",
+            "variants"
           ],
           "properties": {
-            "template": {
-              "$ref": "#/definitions/TemplateInfo"
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "displays info of all templates",
-      "type": "object",
-      "required": [
-        "all_templates"
-      ],
-      "properties": {
-        "all_templates": {
-          "type": "object",
-          "required": [
-            "template_count",
-            "templates"
-          ],
-          "properties": {
-            "template_count": {
-              "description": "number of templates in this minter",
+            "category_count": {
+              "description": "number of categories",
               "type": "integer",
-              "format": "uint16",
+              "format": "uint8",
               "minimum": 0.0
             },
-            "templates": {
-              "description": "template infos",
+            "forced_cyclops": {
+              "description": "forced variant for cyclops",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "forced_jawless": {
+              "description": "forced variant if jawless",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "index": {
+              "description": "this category's index",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "name": {
+              "description": "trait category name",
+              "type": "string"
+            },
+            "variant_count": {
+              "description": "number of variants in this category",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "variants": {
+              "description": "paginated variants for this category",
               "type": "array",
               "items": {
-                "$ref": "#/definitions/TemplateInfo"
+                "$ref": "#/definitions/VariantInfoPlus"
               }
             }
           }
@@ -78,30 +105,104 @@
       }
     },
     {
-      "description": "displays all the nft contracts this minter uses",
+      "description": "display a layer variant",
       "type": "object",
       "required": [
-        "all_nft_contracts"
+        "variant"
       ],
       "properties": {
-        "all_nft_contracts": {
+        "variant": {
           "type": "object",
           "required": [
-            "contract_count",
-            "nft_contracts"
+            "category_index",
+            "info"
           ],
           "properties": {
-            "contract_count": {
-              "description": "number of nft contracts this minter uses",
+            "category_index": {
+              "description": "the index of the category this variant belongs to",
               "type": "integer",
-              "format": "uint16",
+              "format": "uint8",
               "minimum": 0.0
             },
-            "nft_contracts": {
-              "description": "contract infos",
+            "info": {
+              "description": "all the variant info",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/VariantInfoPlus"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "display the common metadata",
+      "type": "object",
+      "required": [
+        "common_metadata"
+      ],
+      "properties": {
+        "common_metadata": {
+          "type": "object",
+          "properties": {
+            "private_metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Metadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "public_metadata": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Metadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "displays the layer categories that get skipped during rolls and the ones that must be rolled first (and total number of categories)",
+      "type": "object",
+      "required": [
+        "roll_config"
+      ],
+      "properties": {
+        "roll_config": {
+          "type": "object",
+          "required": [
+            "category_count",
+            "first",
+            "skip"
+          ],
+          "properties": {
+            "category_count": {
+              "description": "number of categories",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "first": {
+              "description": "the categories that must be rolled first",
               "type": "array",
               "items": {
-                "$ref": "#/definitions/ContractInfo"
+                "type": "string"
+              }
+            },
+            "skip": {
+              "description": "the categories that get skipped",
+              "type": "array",
+              "items": {
+                "type": "string"
               }
             }
           }
@@ -109,30 +210,29 @@
       }
     },
     {
-      "description": "display the public info of the next tokens that templates will mint",
+      "description": "displays the trait variants with dependencies (multiple layers)",
       "type": "object",
       "required": [
-        "public_description_of_nfts"
+        "dependencies"
       ],
       "properties": {
-        "public_description_of_nfts": {
+        "dependencies": {
           "type": "object",
           "required": [
             "count",
-            "nft_infos"
+            "dependencies"
           ],
           "properties": {
             "count": {
-              "description": "template count (either number of names specified in the input or if no names were specified, the total template count of the contract)",
+              "description": "number of dependencies",
               "type": "integer",
               "format": "uint16",
               "minimum": 0.0
             },
-            "nft_infos": {
-              "description": "list of public descriptions",
+            "dependencies": {
               "type": "array",
               "items": {
-                "$ref": "#/definitions/PublicDescription"
+                "$ref": "#/definitions/Dependencies"
               }
             }
           }
@@ -140,39 +240,75 @@
       }
     },
     {
-      "description": "display the public info of the next token to be minted from a specified option ID (template)",
+      "description": "displays the launch trait variants that hide other trait variants",
       "type": "object",
       "required": [
-        "nft_listing_display"
+        "hiders"
       ],
       "properties": {
-        "nft_listing_display": {
+        "hiders": {
           "type": "object",
           "required": [
-            "mintable",
-            "nft_contract_address",
-            "nft_info"
+            "count",
+            "hiders"
           ],
           "properties": {
-            "mintable": {
-              "description": "true if this minting option can mint one more nft",
-              "type": "boolean"
+            "count": {
+              "description": "number of hiders",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
             },
-            "nft_contract_address": {
-              "description": "nft contract address that will contain this token,",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/HumanAddr"
-                }
-              ]
+            "hiders": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Dependencies"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from creating a new genetic image",
+      "type": "object",
+      "required": [
+        "new_gene"
+      ],
+      "properties": {
+        "new_gene": {
+          "type": "object",
+          "required": [
+            "current_image",
+            "genetic_image",
+            "unique_check"
+          ],
+          "properties": {
+            "current_image": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
             },
-            "nft_info": {
-              "description": "the nft fields of interest",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/NftDossierForListing"
-                }
-              ]
+            "genetic_image": {
+              "description": "complete genetic image",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
+            },
+            "unique_check": {
+              "description": "image used for uniqueness checks",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
             }
           }
         }
@@ -200,74 +336,28 @@
         }
       }
     },
-    "ContractInfo": {
-      "description": "code hash and address of a secret contract",
+    "Dependencies": {
+      "description": "describes a trait that has multiple layers",
       "type": "object",
       "required": [
-        "address",
-        "code_hash"
+        "correlated",
+        "id"
       ],
       "properties": {
-        "address": {
-          "description": "contract's address",
-          "allOf": [
-            {
-              "$ref": "#/definitions/HumanAddr"
-            }
-          ]
-        },
-        "code_hash": {
-          "description": "contract's code hash string",
-          "type": "string"
-        }
-      }
-    },
-    "DisplayRoyalty": {
-      "description": "display for a single royalty",
-      "type": "object",
-      "required": [
-        "rate"
-      ],
-      "properties": {
-        "rate": {
-          "description": "royalty rate",
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 0.0
-        },
-        "recipient": {
-          "description": "address to send royalties to.  Can be None to keep addresses private",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/HumanAddr"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      }
-    },
-    "DisplayRoyaltyInfo": {
-      "description": "display all royalty information",
-      "type": "object",
-      "required": [
-        "decimal_places_in_rates",
-        "royalties"
-      ],
-      "properties": {
-        "decimal_places_in_rates": {
-          "description": "decimal places in royalty rates",
-          "type": "integer",
-          "format": "uint8",
-          "minimum": 0.0
-        },
-        "royalties": {
-          "description": "list of royalties",
+        "correlated": {
+          "description": "the other layers that are correlated to this variant",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/DisplayRoyalty"
+            "$ref": "#/definitions/LayerId"
           }
+        },
+        "id": {
+          "description": "id of the layer variant that has dependencies",
+          "allOf": [
+            {
+              "$ref": "#/definitions/LayerId"
+            }
+          ]
         }
       }
     },
@@ -345,7 +435,7 @@
           ]
         },
         "protected_attributes": {
-          "description": "list of attributes whose types are public but whose values are private",
+          "description": "a select list of trait_types that are in the private metadata.  This will only ever be used in public metadata",
           "type": [
             "array",
             "null"
@@ -365,6 +455,24 @@
     },
     "HumanAddr": {
       "type": "string"
+    },
+    "LayerId": {
+      "description": "identifies a layer",
+      "type": "object",
+      "required": [
+        "category",
+        "variant"
+      ],
+      "properties": {
+        "category": {
+          "description": "the layer category name",
+          "type": "string"
+        },
+        "variant": {
+          "description": "the variant name",
+          "type": "string"
+        }
+      }
     },
     "MediaFile": {
       "description": "media file",
@@ -409,7 +517,7 @@
       "type": "object",
       "properties": {
         "extension": {
-          "description": "optional on-chain metadata",
+          "description": "optional on-chain metadata.  Only use this if you are not using `token_uri`",
           "anyOf": [
             {
               "$ref": "#/definitions/Extension"
@@ -420,286 +528,10 @@
           ]
         },
         "token_uri": {
-          "description": "optional uri for off-chain metadata.  This should be prefixed with `http://`, `https://`, `ipfs://`, or `ar://`",
+          "description": "optional uri for off-chain metadata.  This should be prefixed with `http://`, `https://`, `ipfs://`, or `ar://`.  Only use this if you are not using `extension`",
           "type": [
             "string",
             "null"
-          ]
-        }
-      }
-    },
-    "MintRunInfo": {
-      "description": "information about the minting of the NFT",
-      "type": "object",
-      "required": [
-        "mint_run",
-        "serial_number",
-        "token_creator"
-      ],
-      "properties": {
-        "collection_creator": {
-          "description": "optional address of the SNIP-721 contract creator",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/HumanAddr"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "mint_run": {
-          "description": "number of the mint run this token was minted in.  This is used to serialize identical NFTs",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "quantity_minted_this_run": {
-          "description": "optional total number of NFTs minted on this run.  This is used to represent that this token is number m of n",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "serial_number": {
-          "description": "serial number in this mint run.  This is used to serialize identical NFTs",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "time_of_minting": {
-          "description": "optional time of minting (in seconds since 01/01/1970)",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "token_creator": {
-          "description": "address of this minting contract as the NFT's creator",
-          "allOf": [
-            {
-              "$ref": "#/definitions/HumanAddr"
-            }
-          ]
-        }
-      }
-    },
-    "NftDossierForListing": {
-      "description": "NftDossier info stripped down to the listing contract's fields of interest",
-      "type": "object",
-      "required": [
-        "mint_run_info"
-      ],
-      "properties": {
-        "mint_run_info": {
-          "description": "mint run information for this token",
-          "allOf": [
-            {
-              "$ref": "#/definitions/MintRunInfo"
-            }
-          ]
-        },
-        "public_metadata": {
-          "description": "optional public metadata that can be seen by everyone",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Metadata"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "royalty_info": {
-          "description": "optional royalty information for this token",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DisplayRoyaltyInfo"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      }
-    },
-    "PublicDescription": {
-      "description": "Public description of next minted nft",
-      "type": "object",
-      "required": [
-        "mintable",
-        "nft_contract_address",
-        "nft_info",
-        "template_name"
-      ],
-      "properties": {
-        "mintable": {
-          "description": "true if this template can mint one more nft",
-          "type": "boolean"
-        },
-        "nft_contract_address": {
-          "description": "nft contract address that will contain this token,",
-          "allOf": [
-            {
-              "$ref": "#/definitions/HumanAddr"
-            }
-          ]
-        },
-        "nft_info": {
-          "description": "the nft fields of interest",
-          "allOf": [
-            {
-              "$ref": "#/definitions/NftDossierForListing"
-            }
-          ]
-        },
-        "template_name": {
-          "description": "the template that will mint this nft",
-          "type": "string"
-        }
-      }
-    },
-    "Royalty": {
-      "description": "data for a single royalty",
-      "type": "object",
-      "required": [
-        "rate",
-        "recipient"
-      ],
-      "properties": {
-        "rate": {
-          "description": "royalty rate",
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 0.0
-        },
-        "recipient": {
-          "description": "address to send royalties to",
-          "allOf": [
-            {
-              "$ref": "#/definitions/HumanAddr"
-            }
-          ]
-        }
-      }
-    },
-    "RoyaltyInfo": {
-      "description": "all royalty information",
-      "type": "object",
-      "required": [
-        "decimal_places_in_rates",
-        "royalties"
-      ],
-      "properties": {
-        "decimal_places_in_rates": {
-          "description": "decimal places in royalty rates",
-          "type": "integer",
-          "format": "uint8",
-          "minimum": 0.0
-        },
-        "royalties": {
-          "description": "list of royalties",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Royalty"
-          }
-        }
-      }
-    },
-    "TemplateInfo": {
-      "description": "displayable template info",
-      "type": "object",
-      "required": [
-        "mint_run",
-        "minting_authorized",
-        "name",
-        "next_serial",
-        "nft_contract"
-      ],
-      "properties": {
-        "default_royalties_of_nft_contract": {
-          "description": "if there is no royalty information for the template, the optional default royalty information of the snip721 contract",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DisplayRoyaltyInfo"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "mint_run": {
-          "description": "mint run number",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "minting_authorized": {
-          "description": "true if the minting contract is authorized to mint with this nft contract",
-          "type": "boolean"
-        },
-        "minting_limit": {
-          "description": "optional limit to how many clones will be minted for this nft in this mint run",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "name": {
-          "description": "identifier for this template",
-          "type": "string"
-        },
-        "next_serial": {
-          "description": "next serial number to use",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "nft_contract": {
-          "description": "nft contract this template should use for minting",
-          "allOf": [
-            {
-              "$ref": "#/definitions/ContractInfo"
-            }
-          ]
-        },
-        "private_metadata": {
-          "description": "optional private metadata that can only be seen by the owner and whitelist. This will only be displayed if an admin is querying",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Metadata"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "public_metadata": {
-          "description": "optional public metadata that can be seen by everyone",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Metadata"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "royalty_info_of_template": {
-          "description": "optional royalty information for this template",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/RoyaltyInfo"
-            },
-            {
-              "type": "null"
-            }
           ]
         }
       }
@@ -735,6 +567,82 @@
         "value": {
           "description": "trait value",
           "type": "string"
+        }
+      }
+    },
+    "VariantInfo": {
+      "description": "trait variant information",
+      "type": "object",
+      "required": [
+        "jawed_weight",
+        "name"
+      ],
+      "properties": {
+        "jawed_weight": {
+          "description": "randomization weight for this trait variant if jawed",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "jawless_weight": {
+          "description": "randomization weight for this variant if jawless",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "name": {
+          "description": "trait variant name",
+          "type": "string"
+        },
+        "svg": {
+          "description": "svg data if name is not `None`",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "VariantInfoPlus": {
+      "description": "trait variant information with its index and dependencies",
+      "type": "object",
+      "required": [
+        "hides_at_launch",
+        "includes",
+        "index",
+        "variant_info"
+      ],
+      "properties": {
+        "hides_at_launch": {
+          "description": "trait variants it hides at launch",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerId"
+          }
+        },
+        "includes": {
+          "description": "layer variants it includes",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerId"
+          }
+        },
+        "index": {
+          "description": "index of variant",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "variant_info": {
+          "description": "variant info",
+          "allOf": [
+            {
+              "$ref": "#/definitions/VariantInfo"
+            }
+          ]
         }
       }
     }

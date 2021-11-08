@@ -98,260 +98,452 @@
       }
     },
     {
-      "description": "add a new nft template",
+      "description": "allows an admin to add more viewers",
       "type": "object",
       "required": [
-        "add_template"
+        "add_viewers"
       ],
       "properties": {
-        "add_template": {
+        "add_viewers": {
           "type": "object",
           "required": [
-            "template"
+            "viewers"
           ],
           "properties": {
-            "template": {
-              "$ref": "#/definitions/Template"
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "add a new nft contract",
-      "type": "object",
-      "required": [
-        "add_nft_contract"
-      ],
-      "properties": {
-        "add_nft_contract": {
-          "type": "object",
-          "required": [
-            "nft_contract"
-          ],
-          "properties": {
-            "nft_contract": {
-              "$ref": "#/definitions/ContractInfo"
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "update the royalty info on an existing template",
-      "type": "object",
-      "required": [
-        "set_royalty_info"
-      ],
-      "properties": {
-        "set_royalty_info": {
-          "type": "object",
-          "required": [
-            "template_name"
-          ],
-          "properties": {
-            "royalty_info": {
-              "description": "the new royalty information for this template.  If None, it will delete any existing royalties",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/RoyaltyInfo"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "template_name": {
-              "description": "name of the template to update",
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "Mint an NFT for each buyer.  This can only be called by a listing contract this minter has created",
-      "type": "object",
-      "required": [
-        "mint"
-      ],
-      "properties": {
-        "mint": {
-          "type": "object",
-          "required": [
-            "buyers",
-            "option_id"
-          ],
-          "properties": {
-            "buyers": {
-              "description": "the buyers of a mint-on-demand NFT",
+            "viewers": {
+              "description": "list of new addresses with viewing priveleges",
               "type": "array",
               "items": {
                 "$ref": "#/definitions/HumanAddr"
               }
-            },
-            "option_id": {
-              "description": "mint NFTs from the specified minting option",
-              "type": "string"
             }
           }
         }
       }
     },
     {
-      "description": "start another mint run for any template that has reached its limit or does not have a limit",
+      "description": "allows an admin to remove viewer addresses",
       "type": "object",
       "required": [
-        "re_release_nft"
+        "remove_viewers"
       ],
       "properties": {
-        "re_release_nft": {
+        "remove_viewers": {
           "type": "object",
           "required": [
-            "template_name"
+            "viewers"
           ],
           "properties": {
-            "minting_limit": {
-              "description": "optional limit to how many clones will be minted for the next mint run",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint32",
-              "minimum": 0.0
-            },
-            "template_name": {
-              "type": "string"
+            "viewers": {
+              "description": "list of address to revoke viewing priveleges from",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
             }
           }
         }
       }
     },
     {
-      "description": "create a mint-on-demand listing",
+      "description": "allows an admin to add minters",
       "type": "object",
       "required": [
-        "create_listing"
+        "add_minters"
       ],
       "properties": {
-        "create_listing": {
+        "add_minters": {
           "type": "object",
           "required": [
-            "batch_send",
-            "buy_contract",
-            "closes_at",
-            "entropy",
-            "factory_contract",
-            "label",
-            "price"
+            "minters"
           ],
           "properties": {
-            "batch_send": {
-              "description": "true if purchasing token implements BatchSend",
-              "type": "boolean"
-            },
-            "buy_contract": {
-              "description": "purchase contract code hash and address",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/ContractInfo"
-                }
-              ]
-            },
-            "closes_at": {
-              "description": "timestamp after which the operator may close the listing. Timestamp is in seconds since epoch 01/01/1970",
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "description": {
-              "description": "Optional free-form description of the listing",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "entropy": {
-              "description": "entropy used for random viewing key generation",
-              "type": "string"
-            },
-            "existing_template": {
-              "description": "if selling from an existing template, the name of the template being sold.  If BOTH `existing_template` and `new_template` are supplied in the same tx, it will ignore the `existing template`",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "factory_contract": {
-              "description": "factory contract code hash and address",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/ContractInfo"
-                }
-              ]
-            },
-            "label": {
-              "description": "String label for the listing",
-              "type": "string"
-            },
-            "new_template": {
-              "description": "new template to add and use for the listing.  If BOTH `existing_template` and `new_template` are supplied in the same tx, it will ignore the `existing template`",
+            "minters": {
+              "description": "list of new addresses with viewing priveleges",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "allows an admin to remove minter addresses",
+      "type": "object",
+      "required": [
+        "remove_minters"
+      ],
+      "properties": {
+        "remove_minters": {
+          "type": "object",
+          "required": [
+            "minters"
+          ],
+          "properties": {
+            "minters": {
+              "description": "list of address to revoke viewing priveleges from",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "add new trait categories.  This in not meant to be used after minting begins",
+      "type": "object",
+      "required": [
+        "add_categories"
+      ],
+      "properties": {
+        "add_categories": {
+          "type": "object",
+          "required": [
+            "categories"
+          ],
+          "properties": {
+            "categories": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/CategoryInfo"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "add new trait variants to existing categories",
+      "type": "object",
+      "required": [
+        "add_variants"
+      ],
+      "properties": {
+        "add_variants": {
+          "type": "object",
+          "required": [
+            "variants"
+          ],
+          "properties": {
+            "variants": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/CategoryInfo"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "change the name, forced variants, or weight tables for an existing trait category",
+      "type": "object",
+      "required": [
+        "modify_category"
+      ],
+      "properties": {
+        "modify_category": {
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "forced_variants": {
+              "description": "optional new forced variants",
               "anyOf": [
                 {
-                  "$ref": "#/definitions/Template"
+                  "$ref": "#/definitions/ForcedVariants"
                 },
                 {
                   "type": "null"
                 }
               ]
             },
-            "payment_address": {
-              "description": "optional address to send proceeds to if not the creator",
+            "name": {
+              "description": "name of the trait category to modify",
+              "type": "string"
+            },
+            "new_name": {
+              "description": "optional new name for the trait category",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "weights": {
+              "description": "optional new weight tables for the category",
               "anyOf": [
                 {
-                  "$ref": "#/definitions/HumanAddr"
+                  "$ref": "#/definitions/Weights"
                 },
                 {
                   "type": "null"
                 }
               ]
-            },
-            "price": {
-              "description": "listing price",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/Uint128"
-                }
-              ]
-            },
-            "quantity_for_sale": {
-              "description": "optional number of NFTs to mint before the listing will auto-close.  If not specified, the listing will remain open until the creator closes it by calling CancelListing or the closes time is reached",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "uint32",
-              "minimum": 0.0
             }
           }
         }
       }
     },
     {
-      "description": "register a listing address that will be allowed to request minting.  This will only be accepted from the factory address just called when doing the CreateListing",
+      "description": "modify existing trait variants",
       "type": "object",
       "required": [
-        "register_listing"
+        "modify_variants"
       ],
       "properties": {
-        "register_listing": {
+        "modify_variants": {
           "type": "object",
           "required": [
-            "listing_address"
+            "modifications"
           ],
           "properties": {
-            "listing_address": {
-              "$ref": "#/definitions/HumanAddr"
+            "modifications": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/VariantModInfo"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "set the common metadata for the collection",
+      "type": "object",
+      "required": [
+        "set_metadata"
+      ],
+      "properties": {
+        "set_metadata": {
+          "type": "object",
+          "properties": {
+            "private_metadata": {
+              "description": "common private metadata",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Metadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "public_metadata": {
+              "description": "common public metadata",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Metadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Sets the layer categories to skip when rolling and which categories must be rolled first instead of in layer order",
+      "type": "object",
+      "required": [
+        "set_roll_config"
+      ],
+      "properties": {
+        "set_roll_config": {
+          "type": "object",
+          "required": [
+            "first",
+            "skip"
+          ],
+          "properties": {
+            "first": {
+              "description": "names of layers that must be rolled first",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "skip": {
+              "description": "names of the layer categories to skip when rolling",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "add dependencies for traits that have multiple layers",
+      "type": "object",
+      "required": [
+        "add_dependencies"
+      ],
+      "properties": {
+        "add_dependencies": {
+          "type": "object",
+          "required": [
+            "dependencies"
+          ],
+          "properties": {
+            "dependencies": {
+              "description": "new dependencies to add",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Dependencies"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "remove dependecies from trait variants",
+      "type": "object",
+      "required": [
+        "remove_dependencies"
+      ],
+      "properties": {
+        "remove_dependencies": {
+          "type": "object",
+          "required": [
+            "dependencies"
+          ],
+          "properties": {
+            "dependencies": {
+              "description": "dependencies to remove",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Dependencies"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "modify dependencies of a trait variant",
+      "type": "object",
+      "required": [
+        "modify_dependencies"
+      ],
+      "properties": {
+        "modify_dependencies": {
+          "type": "object",
+          "required": [
+            "dependencies"
+          ],
+          "properties": {
+            "dependencies": {
+              "description": "dependencies to modify",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Dependencies"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "add launch trait variants that hide other trait variants",
+      "type": "object",
+      "required": [
+        "add_hiders"
+      ],
+      "properties": {
+        "add_hiders": {
+          "type": "object",
+          "required": [
+            "hiders"
+          ],
+          "properties": {
+            "hiders": {
+              "description": "new hiders to add",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Dependencies"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "remove launch trait variants that hide other trait variants",
+      "type": "object",
+      "required": [
+        "remove_hiders"
+      ],
+      "properties": {
+        "remove_hiders": {
+          "type": "object",
+          "required": [
+            "hiders"
+          ],
+          "properties": {
+            "hiders": {
+              "description": "hiders to remove",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Dependencies"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "modify launch trait variants that hide other trait variants",
+      "type": "object",
+      "required": [
+        "modify_hiders"
+      ],
+      "properties": {
+        "modify_hiders": {
+          "type": "object",
+          "required": [
+            "hiders"
+          ],
+          "properties": {
+            "hiders": {
+              "description": "hiders to modify",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Dependencies"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "allow a minter to add a gene to prevent a future duplicate",
+      "type": "object",
+      "required": [
+        "add_gene"
+      ],
+      "properties": {
+        "add_gene": {
+          "type": "object",
+          "required": [
+            "gene"
+          ],
+          "properties": {
+            "gene": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
             }
           }
         }
@@ -400,25 +592,63 @@
         }
       }
     },
-    "ContractInfo": {
-      "description": "code hash and address of a secret contract",
+    "CategoryInfo": {
+      "description": "trait category information",
       "type": "object",
       "required": [
-        "address",
-        "code_hash"
+        "name",
+        "variants"
       ],
       "properties": {
-        "address": {
-          "description": "contract's address",
-          "allOf": [
-            {
-              "$ref": "#/definitions/HumanAddr"
-            }
+        "forced_cyclops": {
+          "description": "forced variant for cyclops",
+          "type": [
+            "string",
+            "null"
           ]
         },
-        "code_hash": {
-          "description": "contract's code hash string",
+        "forced_jawless": {
+          "description": "forced variant if jawless",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "trait category name",
           "type": "string"
+        },
+        "variants": {
+          "description": "variants for this category",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VariantInfo"
+          }
+        }
+      }
+    },
+    "Dependencies": {
+      "description": "describes a trait that has multiple layers",
+      "type": "object",
+      "required": [
+        "correlated",
+        "id"
+      ],
+      "properties": {
+        "correlated": {
+          "description": "the other layers that are correlated to this variant",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerId"
+          }
+        },
+        "id": {
+          "description": "id of the layer variant that has dependencies",
+          "allOf": [
+            {
+              "$ref": "#/definitions/LayerId"
+            }
+          ]
         }
       }
     },
@@ -496,7 +726,7 @@
           ]
         },
         "protected_attributes": {
-          "description": "list of attributes whose types are public but whose values are private",
+          "description": "a select list of trait_types that are in the private metadata.  This will only ever be used in public metadata",
           "type": [
             "array",
             "null"
@@ -514,8 +744,46 @@
         }
       }
     },
+    "ForcedVariants": {
+      "description": "forced variants",
+      "type": "object",
+      "properties": {
+        "forced_cyclops": {
+          "description": "forced variant for cyclops",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "forced_jawless": {
+          "description": "forced variant if jawless",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
     "HumanAddr": {
       "type": "string"
+    },
+    "LayerId": {
+      "description": "identifies a layer",
+      "type": "object",
+      "required": [
+        "category",
+        "variant"
+      ],
+      "properties": {
+        "category": {
+          "description": "the layer category name",
+          "type": "string"
+        },
+        "variant": {
+          "description": "the variant name",
+          "type": "string"
+        }
+      }
     },
     "MediaFile": {
       "description": "media file",
@@ -560,7 +828,7 @@
       "type": "object",
       "properties": {
         "extension": {
-          "description": "optional on-chain metadata",
+          "description": "optional on-chain metadata.  Only use this if you are not using `token_uri`",
           "anyOf": [
             {
               "$ref": "#/definitions/Extension"
@@ -571,123 +839,10 @@
           ]
         },
         "token_uri": {
-          "description": "optional uri for off-chain metadata.  This should be prefixed with `http://`, `https://`, `ipfs://`, or `ar://`",
+          "description": "optional uri for off-chain metadata.  This should be prefixed with `http://`, `https://`, `ipfs://`, or `ar://`.  Only use this if you are not using `extension`",
           "type": [
             "string",
             "null"
-          ]
-        }
-      }
-    },
-    "Royalty": {
-      "description": "data for a single royalty",
-      "type": "object",
-      "required": [
-        "rate",
-        "recipient"
-      ],
-      "properties": {
-        "rate": {
-          "description": "royalty rate",
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 0.0
-        },
-        "recipient": {
-          "description": "address to send royalties to",
-          "allOf": [
-            {
-              "$ref": "#/definitions/HumanAddr"
-            }
-          ]
-        }
-      }
-    },
-    "RoyaltyInfo": {
-      "description": "all royalty information",
-      "type": "object",
-      "required": [
-        "decimal_places_in_rates",
-        "royalties"
-      ],
-      "properties": {
-        "decimal_places_in_rates": {
-          "description": "decimal places in royalty rates",
-          "type": "integer",
-          "format": "uint8",
-          "minimum": 0.0
-        },
-        "royalties": {
-          "description": "list of royalties",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Royalty"
-          }
-        }
-      }
-    },
-    "Template": {
-      "description": "nft info used to mint clones",
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "minting_limit": {
-          "description": "optional limit to how many clones will be minted for the first mint run",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "name": {
-          "description": "identifier for this template",
-          "type": "string"
-        },
-        "nft_contract": {
-          "description": "optional nft contract this template should use for minting",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ContractInfo"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "private_metadata": {
-          "description": "optional private metadata that can only be seen by the owner and whitelist",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Metadata"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "public_metadata": {
-          "description": "optional public metadata that can be seen by everyone",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Metadata"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "royalty_info": {
-          "description": "optional royalty information for this token",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/RoyaltyInfo"
-            },
-            {
-              "type": "null"
-            }
           ]
         }
       }
@@ -726,8 +881,114 @@
         }
       }
     },
-    "Uint128": {
-      "type": "string"
+    "VariantInfo": {
+      "description": "trait variant information",
+      "type": "object",
+      "required": [
+        "jawed_weight",
+        "name"
+      ],
+      "properties": {
+        "jawed_weight": {
+          "description": "randomization weight for this trait variant if jawed",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "jawless_weight": {
+          "description": "randomization weight for this variant if jawless",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "name": {
+          "description": "trait variant name",
+          "type": "string"
+        },
+        "svg": {
+          "description": "svg data if name is not `None`",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "VariantModInfo": {
+      "description": "info needed to call ModifyVariants",
+      "type": "object",
+      "required": [
+        "category",
+        "modifications"
+      ],
+      "properties": {
+        "category": {
+          "description": "trait category name",
+          "type": "string"
+        },
+        "modifications": {
+          "description": "modifications to make to variants in this category",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VariantModification"
+          }
+        }
+      }
+    },
+    "VariantModification": {
+      "description": "info needed to modify trait variants",
+      "type": "object",
+      "required": [
+        "modified_variant",
+        "name"
+      ],
+      "properties": {
+        "modified_variant": {
+          "description": "new variant data (may include a variant name change)",
+          "allOf": [
+            {
+              "$ref": "#/definitions/VariantInfo"
+            }
+          ]
+        },
+        "name": {
+          "description": "(old) trait variant name",
+          "type": "string"
+        }
+      }
+    },
+    "Weights": {
+      "description": "randomization weights",
+      "type": "object",
+      "required": [
+        "jawed_weights"
+      ],
+      "properties": {
+        "jawed_weights": {
+          "description": "randomization weight table for jawed",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          }
+        },
+        "jawless_weights": {
+          "description": "randomization weight table for jawless",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          }
+        }
+      }
     }
   }
 }
