@@ -1,7 +1,7 @@
 use cosmwasm_std::{
     to_binary, Api, CanonicalAddr, Env, Extern, HandleResponse, HandleResult,
     HumanAddr, InitResponse, InitResult, Querier, QueryResult, StdError,
-    StdResult, Storage,
+    StdResult, Storage, ReadonlyStorage,
 };
 use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
 use std::cmp::min;
@@ -666,100 +666,33 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
         skip: Vec::new(),
         first: Vec::new(),
     });
-    let mut current_image: Vec<u8> = vec![255; numcats as usize];
-    let mut genetic_image: Vec<u8> = current_image.clone();
+    let depends: Vec<StoredDependencies> = may_load(&deps.storage, DEPENDENCIES_KEY)?.unwrap_or_else(Vec::new);
+    let hiders: Vec<StoredDependencies> = may_load(&deps.storage, HIDERS_KEY)?.unwrap_or_else(Vec::new);
+    let mut cat_cache: Vec<CatCache> = Vec::new();
+    let mut none_cache: Vec<StoredLayerId> = Vec::new();
 
+    // define some storages
     // background is always the first layer
-    let var_map = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &0u8.to_le_bytes()], &deps.storage);
-    let var_idx: u8 = may_load(&var_map, background.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Background does not have a variant named {}", background)))?;
-    current_image[0] = var_idx;
-    genetic_image[0] = var_idx;
-
-    let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
-    let mut is_cyclops = false;
-    let mut is_jawless = false;
+    let background_map = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &0u8.to_le_bytes()], &deps.storage);
+    let background_idx: u8 = may_load(&background_map, background.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Background does not have a variant named {}", background)))?;
     let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
     let eye_type_idx: u8 = may_load(&cat_map, "Eye Type".as_bytes())?.ok_or_else(|| StdError::generic_err("Eye Type layer category not found"))?;
     let chin_idx: u8 = may_load(&cat_map, "Chin".as_bytes())?.ok_or_else(|| StdError::generic_err("Chin layer category not found"))?;
-    let eye_type_var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &eye_type_idx.to_le_bytes()], &deps. storage);
-    let chin_var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &chin_idx.to_le_bytes()], &deps. storage);
-    // roll the ones that should be first
-    for inits in roll.first.iter() {
-        let cat: Category = may_load(&cat_store, &inits.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
-        let winner = draw_variant(&mut rng, &cat.jawed_weights);
-        // if we picked an eye type
-        if *inits == eye_type_idx {
-            let eye_type: Variant = may_load(&eye_type_var_store, &winner.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Eye Type variant storage is corrupt"))?;
-            is_cyclops = eye_type.name == *"Cyclops";
-        } else if *inits == chin_idx {
-            let chin: Variant = may_load(&chin_var_store, &winner.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Chin variant storage is corrupt"))?;
-            is_jawless = chin.name == *"None";
+    
+    let mut current_image: Vec<u8> = Vec::new();
+    let mut genetic_image: Vec<u8> = Vec::new();
+    let mut unique_check: Vec<u8> = Vec::new();
+    let mut roll_it = true;
+    while roll_it {
+        let (reroll, current, genetic, unique) = new_gene_impl(&deps.storage, &mut rng, numcats, &roll, &depends, &hiders, eye_type_idx, chin_idx, background_idx, &mut none_cache, &mut cat_cache)?;
+        if !reroll {
+            current_image = current;
+            genetic_image = genetic;
+            unique_check = unique;
         }
-        current_image[*inits as usize] = winner;
-        genetic_image[*inits as usize] = winner;
+        roll_it = reroll;
     }
 
-    let depends: Vec<StoredDependencies> = may_load(&deps.storage, DEPENDENCIES_KEY)?.unwrap_or_else(Vec::new);
-    // roll the rest
-    for idx in 1u8..numcats {
-        // don't need to roll if we already did or it should be skipped
-        if roll.skip.contains(&idx) || roll.first.contains(&idx) {
-            continue;
-        }
-        let cat: Category = may_load(&cat_store, &idx.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
-        // grab the right weight table
-        let weights = if is_jawless {
-            cat.jawless_weights.map_or(cat.jawed_weights, |w| w)
-        } else {
-            cat.jawed_weights
-        };
-        // see if there is a forced variant
-        let forced = if is_cyclops {
-            cat.forced_cyclops
-        } else if is_jawless {
-            cat.forced_jawless
-        } else {
-            None
-        };
-        // forced variants are revealed immediately
-        let (winner, reveal_it) = if let Some(f) = forced {
-            (f, true)
-        } else {
-            (draw_variant(&mut rng, &weights), false)
-        };
-        genetic_image[idx as usize] = winner;
-        if reveal_it {
-            current_image[idx as usize] = winner;
-        }
-        // add additional layers for this trait if necessary
-        let id = StoredLayerId {
-            category: idx,
-            variant: winner,
-        };
-        if let Some(dep) = depends.iter().find(|d| d.id == id) {
-            for multi in dep.correlated.iter() {
-                genetic_image[multi.category as usize] = multi.variant;
-            }
-        }
-    }
-    // create a uniqueness array that disregards variants that get hidden by other variants
-    let hiders: Vec<StoredDependencies> = may_load(&deps.storage, HIDERS_KEY)?.unwrap_or_else(Vec::new);
-    let mut unique_check = genetic_image.clone();
-    for idx in 1u8..numcats {
-        let hider_id = StoredLayerId {
-            category: idx,
-            variant: genetic_image[idx as usize],
-        };
-        if let Some(hider) = hiders.iter().find(|h| h.id == hider_id) {
-            for hidden in hider.correlated.iter() {
-                if genetic_image[hidden.category as usize] == hidden.variant {
-                    let var_map = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &hidden.category.to_le_bytes()], &deps.storage);
-                    let none_idx: u8 = may_load(&var_map, "None".as_bytes())?.ok_or_else(|| StdError::generic_err("A hidden variant's category does not have a None variant"))?;
-                    unique_check[hidden.category as usize] = none_idx;
-                }
-            }
-        }
-    }
     to_binary(&QueryAnswer::NewGene {
         current_image,
         genetic_image,
@@ -1570,4 +1503,236 @@ fn draw_variant(
         }
     }
     winner
+}
+
+/// Returns StdResult<Option<Vec<u8>>>
+///
+/// checks if a complete genetic image is unique after ignoring any traits that are hidden by
+/// other traits
+///
+/// # Arguments
+///
+/// * `storage` - a reference to the contract's storage
+/// * `genetic` - reference to the genetic image
+/// * `hiders` - list of variants that hide other variants
+/// * `numcats` - total number of categories
+/// * `none_cache` - list of None trait variants that have already been retrieved
+fn check_unique<S: ReadonlyStorage>(
+    storage: &S,
+    genetic: &[u8],
+    hiders: &[StoredDependencies],
+    numcats: u8,
+    none_cache: &mut Vec<StoredLayerId>,
+) -> StdResult<Option<Vec<u8>>> {
+    let mut temp: Vec<u8> = genetic.to_owned();
+    for idx in 1u8..numcats {
+        let this_var = StoredLayerId {
+            category: idx,
+            variant: genetic[idx as usize],
+        };
+        if let Some(hider) = hiders.iter().find(|h| h.id == this_var) {
+            for hidden in hider.correlated.iter() {
+                if genetic[hidden.category as usize] == hidden.variant {
+                    let none_idx = if let Some(var) = none_cache.iter().find(|n| n.category == hidden.category) {
+                        var.variant
+                    } else {
+                        let var_map = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &hidden.category.to_le_bytes()], storage);
+                        let idx: u8 = may_load(&var_map, "None".as_bytes())?.ok_or_else(|| StdError::generic_err("A hidden variant's category does not have a None variant"))?;
+                        none_cache.push(StoredLayerId {
+                            category: hidden.category,
+                            variant: idx,
+                        });
+                        idx
+                    };
+                    temp[hidden.category as usize] = none_idx;
+                }
+            }
+        }
+    }
+    // don't consider background
+    let unique = temp.split_off(1);
+    let gene_store = ReadonlyPrefixedStorage::new(PREFIX_GENE, storage);
+    let resp = if may_load::<bool, _>(&gene_store, &unique)?.is_some() {
+        None
+    } else {
+        Some(unique)
+    };
+    Ok(resp)
+}
+
+/// used to cache categories
+pub struct CatCache {
+    pub index: u8,
+    pub category: Category,
+}
+
+/// Returns StdResult<(bool, Vec<u8>, Vec<u8>, Vec<u8>)>
+///
+/// creates a random NFT, and returns the revealed image, complete genetic image, and 
+/// uniqueness mask if it was able to find a unique image without having to reroll the
+/// archetype.  If it couldn't, it returns true to signify the need to start over
+///
+/// # Arguments
+///
+/// * `storage` - a reference to the contract's storage
+/// * `rng` - a mutable reference to the Prng
+/// * `numcats` - total number of categories
+/// * `roll` - a reference to the RollConfig
+/// * `depends` - list of traits that have multiple layers
+/// * `hiders` - list of variants that hide other variants
+/// * `eye_type_idx` - Eye Type category index
+/// * `chin_idx` - Chin category index
+/// * `background_idx` - background variant index
+/// * `none_cache` - list of None trait variants that have already been retrieved
+/// * `cat_cache` - list of Categories that have already been retrieved
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+fn new_gene_impl<S: ReadonlyStorage>(
+    storage: &S,
+    rng: &mut Prng,
+    numcats: u8,
+    roll: &RollConfig,
+    depends: &[StoredDependencies],
+    hiders: &[StoredDependencies],
+    eye_type_idx: u8,
+    chin_idx: u8,
+    background_idx: u8,
+    none_cache: &mut Vec<StoredLayerId>,
+    cat_cache: &mut Vec<CatCache>,
+) -> StdResult<(bool, Vec<u8>, Vec<u8>, Vec<u8>)> {
+    // define some storages
+    let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, storage);
+    let eye_type_var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &eye_type_idx.to_le_bytes()], storage);
+    let chin_var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &chin_idx.to_le_bytes()], storage);
+
+    let mut current_image: Vec<u8> = vec![255; numcats as usize];
+    let mut genetic_image: Vec<u8> = current_image.clone();
+    let mut skipping: Vec<bool> = vec![false; numcats as usize];
+    // never have to roll the background
+    skipping[0] = true;
+    // any layers being skipped should be set to None
+    for skip_cat in roll.skip.iter() {
+        let none_idx = if let Some(var) = none_cache.iter().find(|n| n.category == *skip_cat) {
+            var.variant
+        } else {
+            let var_map = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &skip_cat.to_le_bytes()], storage);
+            let idx: u8 = may_load(&var_map, "None".as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Skipped category {} does not have a None variant", skip_cat)))?;
+            // add to the none cache
+            none_cache.push(StoredLayerId {
+                category: *skip_cat,
+                variant: idx,
+            });
+            idx
+        };
+        genetic_image[*skip_cat as usize] = none_idx;
+        skipping[*skip_cat as usize] = true;
+    }
+    // set the background
+    current_image[0] = background_idx;
+    genetic_image[0] = background_idx;
+    let mut is_cyclops = false;
+    let mut is_jawless = false;
+
+    // roll the ones that should be first
+    for inits in roll.first.iter() {
+        let cat = if let Some(c) = cat_cache.iter().find(|c| c.index == *inits) {
+            &c.category
+        } else {
+            let c: Category = may_load(&cat_store, &inits.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
+            cat_cache.push(CatCache {
+                index: *inits,
+                category: c,
+            });
+            &cat_cache.last().ok_or_else(|| StdError::generic_err("We just pushed a CatCache!"))?.category
+        };
+        let winner = draw_variant(rng, &cat.jawed_weights);
+        // if we picked an eye type
+        if *inits == eye_type_idx {
+            let eye_type: Variant = may_load(&eye_type_var_store, &winner.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Eye Type variant storage is corrupt"))?;
+            is_cyclops = eye_type.name == *"Cyclops";
+        } else if *inits == chin_idx {
+            let chin: Variant = may_load(&chin_var_store, &winner.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Chin variant storage is corrupt"))?;
+            is_jawless = chin.name == *"None";
+        }
+        // archetype traits are revealed immediately
+        current_image[*inits as usize] = winner;
+        genetic_image[*inits as usize] = winner;
+        skipping[*inits as usize] = true;
+    }
+
+    let mut idx = 1u8;
+    let mut first_pass = true;
+    // roll the rest
+    loop {
+        // if already rolled every trait
+        if idx >= numcats  {
+            if let Some(unique_check) = check_unique(storage, &genetic_image, hiders, numcats, none_cache)? {
+                return Ok((false, current_image, genetic_image, unique_check));
+            }
+            // if skipping everything, return to try rerolling everything
+            if skipping.iter().all(|b| *b) {
+                return Ok((true, Vec::new(), Vec::new(), Vec::new()));
+            }
+            // start rerolling
+            first_pass = false;
+            idx = 1u8;
+            continue;
+        }
+        if !*skipping.get(idx as usize).ok_or_else(|| StdError::generic_err("Skipping index out of bounds"))? {
+            let cat = if let Some(c) = cat_cache.iter().find(|c| c.index == idx) {
+                &c.category
+            } else {
+                let c: Category = may_load(&cat_store, &idx.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
+                cat_cache.push(CatCache {
+                    index: idx,
+                    category: c,
+                });
+                &cat_cache.last().ok_or_else(|| StdError::generic_err("We just pushed a CatCache!"))?.category
+            };
+            // grab the right weight table
+            let weights = if is_jawless {
+                cat.jawless_weights.as_ref().map_or(&cat.jawed_weights, |w| w)
+            } else {
+                &cat.jawed_weights
+            };
+            // see if there is a forced variant
+            let forced = if is_cyclops {
+                cat.forced_cyclops.as_ref()
+            } else if is_jawless {
+                cat.forced_jawless.as_ref()
+            } else {
+                None
+            };
+            // forced variants are revealed immediately
+            let winner = if let Some(f) = forced {
+                current_image[idx as usize] = *f;
+                // don't attempt to reroll a forced variant
+                skipping[idx as usize] = true;
+                *f
+            } else {
+                draw_variant(rng, weights)
+            };
+            genetic_image[idx as usize] = winner;
+            // add additional layers for this trait if necessary
+            let id = StoredLayerId {
+                category: idx,
+                variant: winner,
+            };
+            if let Some(dep) = depends.iter().find(|d| d.id == id) {
+                for multi in dep.correlated.iter() {
+                    genetic_image[multi.category as usize] = multi.variant;
+                    // don't reroll a dependency
+                    skipping[multi.category as usize] = true;
+                }
+                // don't break dependencies by rerolling a trait that had dependencies
+                skipping[idx as usize] = true;
+            }
+            // if already rolled every trait, see if you have a unique gene
+            if !first_pass {
+                if let Some(unique_check) = check_unique(storage, &genetic_image, hiders, numcats, none_cache)? {
+                    return Ok((false, current_image, genetic_image, unique_check));
+                }
+            }
+        }
+        idx +=1;
+    }
 }
