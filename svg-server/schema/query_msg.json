@@ -418,6 +418,54 @@
           }
         }
       }
+    },
+    {
+      "description": "generates metadata from the input image vector",
+      "type": "object",
+      "required": [
+        "token_metadata"
+      ],
+      "properties": {
+        "token_metadata": {
+          "type": "object",
+          "required": [
+            "image"
+          ],
+          "properties": {
+            "image": {
+              "description": "image indices",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
+            },
+            "permit": {
+              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin, minter or viewer",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {

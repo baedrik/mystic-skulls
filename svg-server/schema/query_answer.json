@@ -137,13 +137,13 @@
       }
     },
     {
-      "description": "display the common metadata",
+      "description": "response for both CommonMetadata and TokenMetadata",
       "type": "object",
       "required": [
-        "common_metadata"
+        "metadata"
       ],
       "properties": {
-        "common_metadata": {
+        "metadata": {
           "type": "object",
           "properties": {
             "private_metadata": {

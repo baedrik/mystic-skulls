@@ -1,7 +1,7 @@
+use cosmwasm_std::HumanAddr;
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 use sha2::{Digest, Sha256};
-use cosmwasm_std::HumanAddr;
 
 pub fn sha_256(data: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();

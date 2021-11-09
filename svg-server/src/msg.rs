@@ -1,9 +1,12 @@
 #![allow(clippy::large_enum_variant)]
-use crate::metadata::{Metadata};
-use crate::state::{StoredDependencies, Category, Variant, PREFIX_CATEGORY_MAP, PREFIX_CATEGORY, PREFIX_VARIANT_MAP, PREFIX_VARIANT};
-use crate::storage::{may_load};
+use crate::metadata::Metadata;
+use crate::state::{
+    Category, StoredDependencies, Variant, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP, PREFIX_VARIANT,
+    PREFIX_VARIANT_MAP,
+};
+use crate::storage::may_load;
 use cosmwasm_std::{HumanAddr, ReadonlyStorage, StdError, StdResult};
-use cosmwasm_storage::{ReadonlyPrefixedStorage};
+use cosmwasm_storage::ReadonlyPrefixedStorage;
 use schemars::JsonSchema;
 use secret_toolkit::permit::Permit;
 use serde::{Deserialize, Serialize};
@@ -185,7 +188,7 @@ pub enum HandleAnswer {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     /// lists the authorized addresses for this server
-    AuthorizedAddresses{
+    AuthorizedAddresses {
         /// optional address and viewing key of an admin
         viewer: Option<ViewerInfo>,
         /// optional permit used to verify admin identity.  If both viewer and permit
@@ -232,7 +235,7 @@ pub enum QueryMsg {
         /// are provided, the viewer will be ignored
         permit: Option<Permit>,
     },
-    /// displays the layer categories that get skipped during rolls and the ones 
+    /// displays the layer categories that get skipped during rolls and the ones
     /// that must be rolled first (and total number of categories)
     RollConfig {
         /// optional address and viewing key of an admin, minter, or viewer
@@ -280,6 +283,16 @@ pub enum QueryMsg {
         /// the name of the background layer variant to use
         background: String,
     },
+    /// generates metadata from the input image vector
+    TokenMetadata {
+        /// optional address and viewing key of an admin, minter or viewer
+        viewer: Option<ViewerInfo>,
+        /// optional permit used to verify admin identity.  If both viewer and permit
+        /// are provided, the viewer will be ignored
+        permit: Option<Permit>,
+        /// image indices
+        image: Vec<u8>,
+    },
 }
 
 /// responses to queries
@@ -316,12 +329,12 @@ pub enum QueryAnswer {
         /// all the variant info
         info: VariantInfoPlus,
     },
-    /// display the common metadata
-    CommonMetadata {
+    /// response for both CommonMetadata and TokenMetadata
+    Metadata {
         public_metadata: Option<Metadata>,
         private_metadata: Option<Metadata>,
     },
-    /// displays the layer categories that get skipped during rolls and the ones 
+    /// displays the layer categories that get skipped during rolls and the ones
     /// that must be rolled first (and total number of categories)
     RollConfig {
         /// number of categories
@@ -455,7 +468,11 @@ impl Dependencies {
     pub fn to_stored<S: ReadonlyStorage>(&self, storage: &S) -> StdResult<StoredDependencies> {
         Ok(StoredDependencies {
             id: self.id.to_stored(storage)?,
-            correlated: self.correlated.iter().map(|l| l.to_stored(storage)).collect::<StdResult<Vec<StoredLayerId>>>()?,
+            correlated: self
+                .correlated
+                .iter()
+                .map(|l| l.to_stored(storage))
+                .collect::<StdResult<Vec<StoredLayerId>>>()?,
         })
     }
 }
@@ -477,9 +494,19 @@ impl LayerId {
     /// * `storage` - a reference to the contract storage
     pub fn to_stored<S: ReadonlyStorage>(&self, storage: &S) -> StdResult<StoredLayerId> {
         let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, storage);
-        let cat_idx: u8 = may_load(&cat_map, self.category.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Category name:  {} does not exist", &self.category)))?;
-        let var_map = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT_MAP, &cat_idx.to_le_bytes()], storage);
-        let var_idx: u8 = may_load(&var_map, self.variant.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Category {} does not have a variant named {}", &self.category, &self.variant)))?;
+        let cat_idx: u8 = may_load(&cat_map, self.category.as_bytes())?.ok_or_else(|| {
+            StdError::generic_err(format!("Category name:  {} does not exist", &self.category))
+        })?;
+        let var_map = ReadonlyPrefixedStorage::multilevel(
+            &[PREFIX_VARIANT_MAP, &cat_idx.to_le_bytes()],
+            storage,
+        );
+        let var_idx: u8 = may_load(&var_map, self.variant.as_bytes())?.ok_or_else(|| {
+            StdError::generic_err(format!(
+                "Category {} does not have a variant named {}",
+                &self.category, &self.variant
+            ))
+        })?;
 
         Ok(StoredLayerId {
             category: cat_idx,
@@ -505,9 +532,11 @@ impl StoredLayerId {
     pub fn to_display<S: ReadonlyStorage>(&self, storage: &S) -> StdResult<LayerId> {
         let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, storage);
         let cat_key = self.category.to_le_bytes();
-        let cat: Category = may_load(&cat_store, &cat_key)?.ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
+        let cat: Category = may_load(&cat_store, &cat_key)?
+            .ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
         let var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &cat_key], storage);
-        let var: Variant = may_load(&var_store, &self.variant.to_le_bytes())?.ok_or_else(|| StdError::generic_err("Variant storage is corrupt"))?;
+        let var: Variant = may_load(&var_store, &self.variant.to_le_bytes())?
+            .ok_or_else(|| StdError::generic_err("Variant storage is corrupt"))?;
         Ok(LayerId {
             category: cat.name,
             variant: var.name,

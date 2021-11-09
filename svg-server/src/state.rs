@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
 use cosmwasm_std::{ReadonlyStorage, StdResult};
+use serde::{Deserialize, Serialize};
 
 use crate::metadata::Metadata;
-use crate::msg::{LayerId, Dependencies, StoredLayerId};
+use crate::msg::{Dependencies, LayerId, StoredLayerId};
 
 /// storage key for the admins list
 pub const ADMINS_KEY: &[u8] = b"admin";
@@ -101,7 +101,11 @@ impl StoredDependencies {
     pub fn to_display<S: ReadonlyStorage>(&self, storage: &S) -> StdResult<Dependencies> {
         Ok(Dependencies {
             id: self.id.to_display(storage)?,
-            correlated: self.correlated.iter().map(|l| l.to_display(storage)).collect::<StdResult<Vec<LayerId>>>()?,
+            correlated: self
+                .correlated
+                .iter()
+                .map(|l| l.to_display(storage))
+                .collect::<StdResult<Vec<LayerId>>>()?,
         })
     }
 }

@@ -1,12 +1,12 @@
 #![allow(clippy::field_reassign_with_default)]
 pub mod contract;
+mod metadata;
 pub mod msg;
 mod rand;
 pub mod state;
 mod storage;
 mod utils;
 mod viewing_key;
-mod metadata;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {
