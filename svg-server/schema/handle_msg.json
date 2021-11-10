@@ -525,24 +525,27 @@
       }
     },
     {
-      "description": "allow a minter to add a gene to prevent a future duplicate",
+      "description": "allow a minter to add genes to prevent a future duplicates",
       "type": "object",
       "required": [
-        "add_gene"
+        "add_genes"
       ],
       "properties": {
-        "add_gene": {
+        "add_genes": {
           "type": "object",
           "required": [
-            "gene"
+            "genes"
           ],
           "properties": {
-            "gene": {
+            "genes": {
               "type": "array",
               "items": {
-                "type": "integer",
-                "format": "uint8",
-                "minimum": 0.0
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                }
               }
             }
           }
@@ -885,13 +888,16 @@
       "description": "trait variant information",
       "type": "object",
       "required": [
-        "jawed_weight",
-        "name"
+        "name",
+        "normal_weight"
       ],
       "properties": {
-        "jawed_weight": {
-          "description": "randomization weight for this trait variant if jawed",
-          "type": "integer",
+        "cyclops_weight": {
+          "description": "randomization weight for cyclops",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint16",
           "minimum": 0.0
         },
@@ -907,6 +913,12 @@
         "name": {
           "description": "trait variant name",
           "type": "string"
+        },
+        "normal_weight": {
+          "description": "randomization weight for this trait variant if skull has 2 eyes and a jaw",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
         },
         "svg": {
           "description": "svg data if name is not `None`",
@@ -964,12 +976,15 @@
       "description": "randomization weights",
       "type": "object",
       "required": [
-        "jawed_weights"
+        "normal_weights"
       ],
       "properties": {
-        "jawed_weights": {
-          "description": "randomization weight table for jawed",
-          "type": "array",
+        "cyclops_weights": {
+          "description": "randomization weight table for cyclops",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "type": "integer",
             "format": "uint16",
@@ -982,6 +997,15 @@
             "array",
             "null"
           ],
+          "items": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          }
+        },
+        "normal_weights": {
+          "description": "normal radomization weight table",
+          "type": "array",
           "items": {
             "type": "integer",
             "format": "uint16",

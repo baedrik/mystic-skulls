@@ -270,44 +270,22 @@
       }
     },
     {
-      "description": "response from creating a new genetic image",
+      "description": "response from creating a new genetic images",
       "type": "object",
       "required": [
-        "new_gene"
+        "new_genes"
       ],
       "properties": {
-        "new_gene": {
+        "new_genes": {
           "type": "object",
           "required": [
-            "current_image",
-            "genetic_image",
-            "unique_check"
+            "genes"
           ],
           "properties": {
-            "current_image": {
+            "genes": {
               "type": "array",
               "items": {
-                "type": "integer",
-                "format": "uint8",
-                "minimum": 0.0
-              }
-            },
-            "genetic_image": {
-              "description": "complete genetic image",
-              "type": "array",
-              "items": {
-                "type": "integer",
-                "format": "uint8",
-                "minimum": 0.0
-              }
-            },
-            "unique_check": {
-              "description": "image used for uniqueness checks",
-              "type": "array",
-              "items": {
-                "type": "integer",
-                "format": "uint8",
-                "minimum": 0.0
+                "$ref": "#/definitions/GeneInfo"
               }
             }
           }
@@ -453,6 +431,44 @@
         }
       }
     },
+    "GeneInfo": {
+      "description": "genetic image information",
+      "type": "object",
+      "required": [
+        "current_image",
+        "genetic_image",
+        "unique_check"
+      ],
+      "properties": {
+        "current_image": {
+          "description": "image at time of minting",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        },
+        "genetic_image": {
+          "description": "complete genetic image",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        },
+        "unique_check": {
+          "description": "image used for uniqueness checks",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        }
+      }
+    },
     "HumanAddr": {
       "type": "string"
     },
@@ -574,13 +590,16 @@
       "description": "trait variant information",
       "type": "object",
       "required": [
-        "jawed_weight",
-        "name"
+        "name",
+        "normal_weight"
       ],
       "properties": {
-        "jawed_weight": {
-          "description": "randomization weight for this trait variant if jawed",
-          "type": "integer",
+        "cyclops_weight": {
+          "description": "randomization weight for cyclops",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint16",
           "minimum": 0.0
         },
@@ -596,6 +615,12 @@
         "name": {
           "description": "trait variant name",
           "type": "string"
+        },
+        "normal_weight": {
+          "description": "randomization weight for this trait variant if skull has 2 eyes and a jaw",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
         },
         "svg": {
           "description": "svg data if name is not `None`",

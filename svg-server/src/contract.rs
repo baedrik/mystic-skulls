@@ -12,9 +12,9 @@ use secret_toolkit::{
 
 use crate::metadata::{Metadata, Trait};
 use crate::msg::{
-    CategoryInfo, Dependencies, ForcedVariants, HandleAnswer, HandleMsg, InitMsg, LayerId,
-    QueryAnswer, QueryMsg, StoredLayerId, VariantInfo, VariantInfoPlus, VariantModInfo, ViewerInfo,
-    Weights,
+    CategoryInfo, Dependencies, ForcedVariants, GeneInfo, HandleAnswer, HandleMsg, InitMsg,
+    LayerId, QueryAnswer, QueryMsg, StoredLayerId, VariantInfo, VariantInfoPlus, VariantModInfo,
+    ViewerInfo, Weights,
 };
 use crate::rand::{extend_entropy, sha_256, Prng};
 use crate::state::{
@@ -103,7 +103,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             public_metadata,
             private_metadata,
         } => try_set_metadata(deps, &env.message.sender, public_metadata, private_metadata),
-        HandleMsg::AddGene { gene } => try_add_gene(deps, &env.message.sender, gene),
+        HandleMsg::AddGenes { genes } => try_add_gene(deps, &env.message.sender, genes),
         HandleMsg::AddAdmins { admins } => {
             try_process_auth_list(deps, &env.message.sender, &admins, true, AddrType::Admin)
         }
@@ -163,11 +163,11 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
 ///
 /// * `deps` - a mutable reference to Extern containing all the contract's external dependencies
 /// * `sender` - a reference to the message sender
-/// * `gene` - image index array of recently minted NFT
+/// * `genes` - image index arrays of recently minted NFTs
 fn try_add_gene<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     sender: &HumanAddr,
-    gene: Vec<u8>,
+    genes: Vec<Vec<u8>>,
 ) -> HandleResult {
     // only allow minters to do this
     let minters: Vec<CanonicalAddr> =
@@ -178,10 +178,12 @@ fn try_add_gene<S: Storage, A: Api, Q: Querier>(
     }
     let mut gene_store = PrefixedStorage::new(PREFIX_GENE, &mut deps.storage);
     // can not allow a duplicate, even though this should have been weeded out before this msg
-    if may_load::<bool, _>(&gene_store, &gene)?.is_some() {
-        return Err(StdError::generic_err("This gene has already been minted"));
+    for gene in genes.into_iter() {
+        if may_load::<bool, _>(&gene_store, &gene)?.is_some() {
+            return Err(StdError::generic_err("Found a genetic twin"));
+        }
+        save(&mut gene_store, &gene, &true)?;
     }
-    save(&mut gene_store, &gene, &true)?;
     Ok(HandleResponse::default())
 }
 
@@ -407,10 +409,15 @@ fn try_modify_category<S: Storage, A: Api, Q: Querier>(
                 },
                 Ok,
             )?;
-            let valid_len = cat.jawed_weights.len();
-            if new_wgts.jawed_weights.len() != valid_len
+            let valid_len = cat.normal_weights.len();
+            if new_wgts.normal_weights.len() != valid_len
                 || new_wgts
                     .jawless_weights
+                    .as_ref()
+                    .filter(|w| w.len() != valid_len)
+                    .is_some()
+                || new_wgts
+                    .cyclops_weights
                     .as_ref()
                     .filter(|w| w.len() != valid_len)
                     .is_some()
@@ -419,12 +426,16 @@ fn try_modify_category<S: Storage, A: Api, Q: Querier>(
                     "New weight tables have incorrect length",
                 ));
             }
-            if cat.jawed_weights != new_wgts.jawed_weights {
-                cat.jawed_weights = new_wgts.jawed_weights;
+            if cat.normal_weights != new_wgts.normal_weights {
+                cat.normal_weights = new_wgts.normal_weights;
                 save_cat = true;
             }
             if cat.jawless_weights != new_wgts.jawless_weights {
                 cat.jawless_weights = new_wgts.jawless_weights;
+                save_cat = true;
+            }
+            if cat.cyclops_weights != new_wgts.cyclops_weights {
+                cat.cyclops_weights = new_wgts.cyclops_weights;
                 save_cat = true;
             }
             may_cat = Some(cat);
@@ -484,15 +495,17 @@ fn try_add_categories<S: Storage, A: Api, Q: Querier>(
                 cat_inf.name
             )));
         }
-        let mut jawed_weights: Vec<u16> = Vec::new();
+        let mut normal_weights: Vec<u16> = Vec::new();
         let mut jawless_weights: Option<Vec<u16>> = None;
+        let mut cyclops_weights: Option<Vec<u16>> = None;
         let cat_key = numcats.to_le_bytes();
         let (cyclops, jawless) = add_variants(
             &mut deps.storage,
             &cat_key,
             cat_inf.variants,
-            &mut jawed_weights,
+            &mut normal_weights,
             &mut jawless_weights,
+            &mut cyclops_weights,
             cat_inf.forced_cyclops,
             cat_inf.forced_jawless,
             &cat_inf.name,
@@ -504,8 +517,9 @@ fn try_add_categories<S: Storage, A: Api, Q: Querier>(
             name: cat_inf.name,
             forced_cyclops: cyclops,
             forced_jawless: jawless,
-            jawed_weights,
+            normal_weights,
             jawless_weights,
+            cyclops_weights,
         };
         let mut cat_store = PrefixedStorage::new(PREFIX_CATEGORY, &mut deps.storage);
         save(&mut cat_store, &cat_key, &cat)?;
@@ -577,15 +591,18 @@ fn try_modify_variants<S: Storage, A: Api, Q: Querier>(
                     name: var_mod.modified_variant.name,
                     svg: var_mod.modified_variant.svg,
                 };
-                let this_wgt = cat.jawed_weights.get_mut(var_idx as usize).ok_or_else(|| {
-                    StdError::generic_err(format!(
-                        "Jawed weight table for category:  {} is corrupt",
-                        &cat_name
-                    ))
-                })?;
+                let this_wgt = cat
+                    .normal_weights
+                    .get_mut(var_idx as usize)
+                    .ok_or_else(|| {
+                        StdError::generic_err(format!(
+                            "Normal weight table for category:  {} is corrupt",
+                            &cat_name
+                        ))
+                    })?;
                 // if weight is changing, update the table
-                if *this_wgt != var_mod.modified_variant.jawed_weight {
-                    *this_wgt = var_mod.modified_variant.jawed_weight;
+                if *this_wgt != var_mod.modified_variant.normal_weight {
+                    *this_wgt = var_mod.modified_variant.normal_weight;
                     save_cat = true;
                 }
                 // if providing a jawless weight
@@ -616,6 +633,37 @@ fn try_modify_variants<S: Storage, A: Api, Q: Querier>(
                     // must provide a jawless weight for a category that has them
                     return Err(StdError::generic_err(format!(
                         "Category:  {} has jawless weights, but variant {} does not",
+                        &cat_name, &var.name
+                    )));
+                }
+                // if providing a cyclops weight
+                if let Some(cyclops) = var_mod.modified_variant.cyclops_weight {
+                    // can't add a cyclops weight to a category that does not have them already
+                    let this_cyclops = cat
+                        .cyclops_weights
+                        .as_mut()
+                        .ok_or_else(|| {
+                            StdError::generic_err(format!(
+                                "Category:  {} does not have cyclops weights, but variant {} does",
+                                &cat_name, &var.name
+                            ))
+                        })?
+                        .get_mut(var_idx as usize)
+                        .ok_or_else(|| {
+                            StdError::generic_err(format!(
+                                "cyclops weight table for category:  {} is corrupt",
+                                &cat_name
+                            ))
+                        })?;
+                    // if weight is changing, update the table
+                    if *this_cyclops != cyclops {
+                        *this_cyclops = cyclops;
+                        save_cat = true;
+                    }
+                } else if cat.cyclops_weights.is_some() {
+                    // must provide a cyclops weight for a category that has them
+                    return Err(StdError::generic_err(format!(
+                        "Category:  {} has cyclops weights, but variant {} does not",
                         &cat_name, &var.name
                     )));
                 }
@@ -676,8 +724,9 @@ fn try_add_variants<S: Storage, A: Api, Q: Querier>(
                 &mut deps.storage,
                 &cat_key,
                 cat_inf.variants,
-                &mut cat.jawed_weights,
+                &mut cat.normal_weights,
                 &mut cat.jawless_weights,
+                &mut cat.cyclops_weights,
                 None,
                 None,
                 &cat_inf.name,
@@ -833,14 +882,14 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
             start_at,
             limit,
         } => query_hiders(deps, viewer, permit, start_at, limit),
-        QueryMsg::NewGene {
+        QueryMsg::NewGenes {
             viewer,
             height,
             time,
             sender,
             entropy,
-            background,
-        } => query_new_gene(deps, viewer, height, time, &sender, &entropy, &background),
+            backgrounds,
+        } => query_new_gene(deps, viewer, height, time, &sender, &entropy, backgrounds),
         QueryMsg::TokenMetadata {
             viewer,
             permit,
@@ -861,7 +910,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
 /// * `time` - the current block time
 /// * `sender` - a reference to the address sending the mint tx
 /// * `entropy` - entropy string slice for randomization
-/// * `background` - background layer variant name
+/// * `backgrounds` - background layer variant names
 fn query_new_gene<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     viewer: ViewerInfo,
@@ -869,7 +918,7 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
     time: u64,
     sender: &HumanAddr,
     entropy: &str,
-    background: &str,
+    backgrounds: Vec<String>,
 ) -> QueryResult {
     let (querier, _) = get_querier(deps, Some(viewer), None)?;
     // only allow minters to call this
@@ -893,57 +942,89 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
         may_load(&deps.storage, HIDERS_KEY)?.unwrap_or_else(Vec::new);
     let mut cat_cache: Vec<CatCache> = Vec::new();
     let mut none_cache: Vec<StoredLayerId> = Vec::new();
-
-    // define some storages
+    let mut var_cache: Vec<VarCache> = Vec::new();
+    let mut back_cache: Vec<BackCache> = Vec::new();
+    let mut genes: Vec<GeneInfo> = Vec::new();
     // background is always the first layer
     let background_map = ReadonlyPrefixedStorage::multilevel(
         &[PREFIX_VARIANT_MAP, &0u8.to_le_bytes()],
         &deps.storage,
     );
-    let background_idx: u8 =
-        may_load(&background_map, background.as_bytes())?.ok_or_else(|| {
-            StdError::generic_err(format!(
-                "Background does not have a variant named {}",
-                background
-            ))
-        })?;
     let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
     let eye_type_idx: u8 = may_load(&cat_map, "Eye Type".as_bytes())?
         .ok_or_else(|| StdError::generic_err("Eye Type layer category not found"))?;
     let chin_idx: u8 = may_load(&cat_map, "Chin".as_bytes())?
         .ok_or_else(|| StdError::generic_err("Chin layer category not found"))?;
 
-    let mut current_image: Vec<u8> = Vec::new();
-    let mut genetic_image: Vec<u8> = Vec::new();
-    let mut unique_check: Vec<u8> = Vec::new();
-    let mut roll_it = true;
-    while roll_it {
-        let (reroll, current, genetic, unique) = new_gene_impl(
-            &deps.storage,
-            &mut rng,
-            numcats,
-            &roll,
-            &depends,
-            &hiders,
-            eye_type_idx,
-            chin_idx,
-            background_idx,
-            &mut none_cache,
-            &mut cat_cache,
-        )?;
-        if !reroll {
-            current_image = current;
-            genetic_image = genetic;
-            unique_check = unique;
+    // create the gene seed
+    let mut gene_seed: Vec<u8> = vec![255; numcats as usize];
+    // any layers being skipped should be set to None
+    for skip_cat in roll.skip.iter() {
+        let none_idx = if let Some(var) = none_cache.iter().find(|n| n.category == *skip_cat) {
+            var.variant
+        } else {
+            let var_map = ReadonlyPrefixedStorage::multilevel(
+                &[PREFIX_VARIANT_MAP, &skip_cat.to_le_bytes()],
+                &deps.storage,
+            );
+            let idx: u8 = may_load(&var_map, "None".as_bytes())?.ok_or_else(|| {
+                StdError::generic_err(format!(
+                    "Skipped category {} does not have a None variant",
+                    skip_cat
+                ))
+            })?;
+            // add to the none cache
+            none_cache.push(StoredLayerId {
+                category: *skip_cat,
+                variant: idx,
+            });
+            idx
+        };
+        gene_seed[*skip_cat as usize] = none_idx;
+    }
+    for back in backgrounds.into_iter() {
+        let background_idx: u8 = if let Some(bg) = back_cache.iter().find(|b| b.id == back) {
+            bg.index
+        } else {
+            let back_idx: u8 = may_load(&background_map, back.as_bytes())?.ok_or_else(|| {
+                StdError::generic_err(format!("Background does not have a variant named {}", back))
+            })?;
+            let entry = BackCache {
+                id: back,
+                index: back_idx,
+            };
+            back_cache.push(entry);
+            back_idx
+        };
+        gene_seed[0] = background_idx;
+        let mut roll_it = true;
+        while roll_it {
+            let (reroll, current_image, genetic_image, unique_check) = new_gene_impl(
+                &deps.storage,
+                &mut rng,
+                numcats,
+                &roll,
+                &depends,
+                &hiders,
+                eye_type_idx,
+                chin_idx,
+                &mut none_cache,
+                &mut cat_cache,
+                &mut var_cache,
+                &gene_seed,
+            )?;
+            if !reroll {
+                genes.push(GeneInfo {
+                    current_image,
+                    genetic_image,
+                    unique_check,
+                });
+            }
+            roll_it = reroll;
         }
-        roll_it = reroll;
     }
 
-    to_binary(&QueryAnswer::NewGene {
-        current_image,
-        genetic_image,
-        unique_check,
-    })
+    to_binary(&QueryAnswer::NewGenes { genes })
 }
 
 /// Returns QueryResult displaying the layer categories that should be skipped when rolling
@@ -1103,48 +1184,7 @@ fn query_variant<S: Storage, A: Api, Q: Querier>(
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
     let cat: Category = may_load(&cat_store, &cat_key)?
         .ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
-    let var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &cat_key], &deps.storage);
-    // see if this variant requires other layer variants
-    let includes = if let Some(dep) = depends.iter().find(|d| d.id == layer_id) {
-        dep.correlated
-            .iter()
-            .map(|l| l.to_display(&deps.storage))
-            .collect::<StdResult<Vec<LayerId>>>()?
-    } else {
-        Vec::new()
-    };
-    // see if this variant hides other layer variants
-    let hides_at_launch = if let Some(dep) = hiders.iter().find(|d| d.id == layer_id) {
-        dep.correlated
-            .iter()
-            .map(|l| l.to_display(&deps.storage))
-            .collect::<StdResult<Vec<LayerId>>>()?
-    } else {
-        Vec::new()
-    };
-    let var: Variant = may_load(&var_store, &layer_id.variant.to_le_bytes())?
-        .ok_or_else(|| StdError::generic_err("Variant storage is corrupt"))?;
-    let var_inf = VariantInfoPlus {
-        index: layer_id.variant,
-        variant_info: VariantInfo {
-            name: var.name,
-            svg: var.svg.filter(|_| svgs),
-            jawed_weight: *cat
-                .jawed_weights
-                .get(layer_id.variant as usize)
-                .ok_or_else(|| StdError::generic_err("Jawed weight table is corrupt"))?,
-            jawless_weight: cat
-                .jawless_weights
-                .map(|w| {
-                    w.get(layer_id.variant as usize)
-                        .cloned()
-                        .ok_or_else(|| StdError::generic_err("Jawless weight table is corrupt"))
-                })
-                .transpose()?,
-        },
-        includes,
-        hides_at_launch,
-    };
+    let var_inf = displ_variant(&deps.storage, &layer_id, &cat, &depends, &hiders, svgs)?;
     to_binary(&QueryAnswer::Variant {
         category_index: layer_id.category,
         info: var_inf,
@@ -1204,7 +1244,7 @@ fn query_category<S: Storage, A: Api, Q: Querier>(
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
     let cat: Category = may_load(&cat_store, &cat_key)?
         .ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
-    let variant_count = cat.jawed_weights.len() as u8;
+    let variant_count = cat.normal_weights.len() as u8;
     let end = min(start + max, variant_count);
     let mut variants: Vec<VariantInfoPlus> = Vec::new();
     let var_store = ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &cat_key], &deps.storage);
@@ -1213,48 +1253,7 @@ fn query_category<S: Storage, A: Api, Q: Querier>(
             category: cat_idx,
             variant: idx,
         };
-        // see if this variant requires other layer variants
-        let includes = if let Some(dep) = depends.iter().find(|d| d.id == layer_id) {
-            dep.correlated
-                .iter()
-                .map(|l| l.to_display(&deps.storage))
-                .collect::<StdResult<Vec<LayerId>>>()?
-        } else {
-            Vec::new()
-        };
-        // see if this variant hides other layer variants
-        let hides_at_launch = if let Some(dep) = hiders.iter().find(|d| d.id == layer_id) {
-            dep.correlated
-                .iter()
-                .map(|l| l.to_display(&deps.storage))
-                .collect::<StdResult<Vec<LayerId>>>()?
-        } else {
-            Vec::new()
-        };
-        let var: Variant = may_load(&var_store, &idx.to_le_bytes())?
-            .ok_or_else(|| StdError::generic_err("Variant storage is corrupt"))?;
-        let var_inf = VariantInfoPlus {
-            index: idx,
-            variant_info: VariantInfo {
-                name: var.name,
-                svg: var.svg.filter(|_| svgs),
-                jawed_weight: *cat
-                    .jawed_weights
-                    .get(idx as usize)
-                    .ok_or_else(|| StdError::generic_err("Jawed weight table is corrupt"))?,
-                jawless_weight: cat
-                    .jawless_weights
-                    .as_ref()
-                    .map(|w| {
-                        w.get(idx as usize)
-                            .cloned()
-                            .ok_or_else(|| StdError::generic_err("Jawless weight table is corrupt"))
-                    })
-                    .transpose()?,
-            },
-            includes,
-            hides_at_launch,
-        };
+        let var_inf = displ_variant(&deps.storage, &layer_id, &cat, &depends, &hiders, svgs)?;
         variants.push(var_inf);
     }
     let forced_cyclops = cat
@@ -1363,6 +1362,8 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
     let mut image_data = r###"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -0.5 24 24" shape-rendering="crispEdges">"###.to_string();
     let mut attributes: Vec<Trait> = Vec::new();
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
+    let mut trait_cnt = 0u8;
+    let mut revealed = 0u8;
 
     for (cat_idx, var_idx) in image.iter().enumerate() {
         let cat_key = (cat_idx as u8).to_le_bytes();
@@ -1383,6 +1384,8 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
                     value: var.name,
                     max_value: None,
                 });
+                revealed += 1;
+                trait_cnt += 1;
             }
         } else if disp_trait {
             attributes.push(Trait {
@@ -1391,7 +1394,17 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
                 value: "???".to_string(),
                 max_value: None,
             });
+            trait_cnt += 1;
         }
+    }
+    let hidden = trait_cnt - revealed;
+    if hidden > 0 {
+        attributes.push(Trait {
+            display_type: None,
+            trait_type: Some("Hidden Traits".to_string()),
+            value: format!("{}", hidden),
+            max_value: None,
+        });
     }
     image_data.push_str("</svg>");
     xten.image_data = Some(image_data);
@@ -1639,8 +1652,9 @@ fn remove_addrs_from_auth<A: Api>(
 /// * `storage` - a mutable reference to the contract's storage
 /// * `cat_key` - index of the category these variants belong to
 /// * `variants` - variants to add to this category
-/// * `jawed_weights` - the jawed weight table for this category
+/// * `normal_weights` - the normal weight table for this category
 /// * `jawless_weights` - the optional jawless weight table for this category
+/// * `cyclops_weights` - the optional cyclops weight table for this category
 /// * `forced_cyclops` - optional variant name that cyclops have to use
 /// * `forced_jawless` - optional variant name that jawless have to use
 /// * `cat_name` - name of this trait category
@@ -1649,13 +1663,14 @@ fn add_variants<S: Storage>(
     storage: &mut S,
     cat_key: &[u8],
     variants: Vec<VariantInfo>,
-    jawed_weights: &mut Vec<u16>,
+    normal_weights: &mut Vec<u16>,
     jawless_weights: &mut Option<Vec<u16>>,
+    cyclops_weights: &mut Option<Vec<u16>>,
     mut forced_cyclops: Option<String>,
     mut forced_jawless: Option<String>,
     cat_name: &str,
 ) -> StdResult<(Option<u8>, Option<u8>)> {
-    let mut var_cnt = jawed_weights.len() as u8;
+    let mut var_cnt = normal_weights.len() as u8;
     let mut cyclops_idx: Option<u8> = None;
     let mut jawless_idx: Option<u8> = None;
     for var_inf in variants.into_iter() {
@@ -1683,30 +1698,53 @@ fn add_variants<S: Storage>(
                 &var.name, &cat_name
             )));
         }
-        jawed_weights.push(var_inf.jawed_weight);
+        normal_weights.push(var_inf.normal_weight);
         // if this is the first variant
         if var_cnt == 0 {
             if let Some(jawless) = var_inf.jawless_weight {
                 let _ = jawless_weights.insert(vec![jawless]);
             }
+            if let Some(cyclops) = var_inf.cyclops_weight {
+                let _ = cyclops_weights.insert(vec![cyclops]);
+            }
         // already have variants
-        } else if let Some(jawless) = var_inf.jawless_weight {
-            // can't add a jawless weight to a category that does not have them already
-            jawless_weights
-                .as_mut()
-                .ok_or_else(|| {
-                    StdError::generic_err(format!(
-                        "Category:  {} does not have jawless weights, but variant {} does",
-                        &cat_name, &var.name
-                    ))
-                })?
-                .push(jawless);
-        } else if jawless_weights.is_some() {
-            // must provide a jawless weight for a category that has them
-            return Err(StdError::generic_err(format!(
-                "Category:  {} has jawless weights, but variant {} does not",
-                &cat_name, &var.name
-            )));
+        } else {
+            if let Some(jawless) = var_inf.jawless_weight {
+                // can't add a jawless weight to a category that does not have them already
+                jawless_weights
+                    .as_mut()
+                    .ok_or_else(|| {
+                        StdError::generic_err(format!(
+                            "Category:  {} does not have jawless weights, but variant {} does",
+                            &cat_name, &var.name
+                        ))
+                    })?
+                    .push(jawless);
+            } else if jawless_weights.is_some() {
+                // must provide a jawless weight for a category that has them
+                return Err(StdError::generic_err(format!(
+                    "Category:  {} has jawless weights, but variant {} does not",
+                    &cat_name, &var.name
+                )));
+            }
+            if let Some(cyclops) = var_inf.cyclops_weight {
+                // can't add a jawless weight to a category that does not have them already
+                cyclops_weights
+                    .as_mut()
+                    .ok_or_else(|| {
+                        StdError::generic_err(format!(
+                            "Category:  {} does not have cyclops weights, but variant {} does",
+                            &cat_name, &var.name
+                        ))
+                    })?
+                    .push(cyclops);
+            } else if cyclops_weights.is_some() {
+                // must provide a jawless weight for a category that has them
+                return Err(StdError::generic_err(format!(
+                    "Category:  {} has cyclops weights, but variant {} does not",
+                    &cat_name, &var.name
+                )));
+            }
         }
         save(&mut var_map, var_name_key, &var_cnt)?;
         let mut var_store = PrefixedStorage::multilevel(&[PREFIX_VARIANT, cat_key], storage);
@@ -2015,6 +2053,18 @@ pub struct CatCache {
     pub category: Category,
 }
 
+/// used to cache variants
+pub struct VarCache {
+    pub id: StoredLayerId,
+    pub variant: Variant,
+}
+
+/// used to cache backgrounds
+pub struct BackCache {
+    pub id: String,
+    pub index: u8,
+}
+
 /// Returns StdResult<(bool, Vec<u8>, Vec<u8>, Vec<u8>)>
 ///
 /// creates a random NFT, and returns the revealed image, complete genetic image, and
@@ -2031,9 +2081,10 @@ pub struct CatCache {
 /// * `hiders` - list of variants that hide other variants
 /// * `eye_type_idx` - Eye Type category index
 /// * `chin_idx` - Chin category index
-/// * `background_idx` - background variant index
 /// * `none_cache` - list of None trait variants that have already been retrieved
 /// * `cat_cache` - list of Categories that have already been retrieved
+/// * `var_cache` - list of Variants that have already been retrieved
+/// * `gene_seed` - starting seed for the gene including skipped categories and background
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn new_gene_impl<S: ReadonlyStorage>(
     storage: &S,
@@ -2044,9 +2095,10 @@ fn new_gene_impl<S: ReadonlyStorage>(
     hiders: &[StoredDependencies],
     eye_type_idx: u8,
     chin_idx: u8,
-    background_idx: u8,
     none_cache: &mut Vec<StoredLayerId>,
     cat_cache: &mut Vec<CatCache>,
+    var_cache: &mut Vec<VarCache>,
+    gene_seed: &[u8],
 ) -> StdResult<(bool, Vec<u8>, Vec<u8>, Vec<u8>)> {
     // define some storages
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, storage);
@@ -2058,38 +2110,11 @@ fn new_gene_impl<S: ReadonlyStorage>(
         ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &chin_idx.to_le_bytes()], storage);
 
     let mut current_image: Vec<u8> = vec![255; numcats as usize];
-    let mut genetic_image: Vec<u8> = current_image.clone();
-    let mut skipping: Vec<bool> = vec![false; numcats as usize];
-    // never have to roll the background
-    skipping[0] = true;
-    // any layers being skipped should be set to None
-    for skip_cat in roll.skip.iter() {
-        let none_idx = if let Some(var) = none_cache.iter().find(|n| n.category == *skip_cat) {
-            var.variant
-        } else {
-            let var_map = ReadonlyPrefixedStorage::multilevel(
-                &[PREFIX_VARIANT_MAP, &skip_cat.to_le_bytes()],
-                storage,
-            );
-            let idx: u8 = may_load(&var_map, "None".as_bytes())?.ok_or_else(|| {
-                StdError::generic_err(format!(
-                    "Skipped category {} does not have a None variant",
-                    skip_cat
-                ))
-            })?;
-            // add to the none cache
-            none_cache.push(StoredLayerId {
-                category: *skip_cat,
-                variant: idx,
-            });
-            idx
-        };
-        genetic_image[*skip_cat as usize] = none_idx;
-        skipping[*skip_cat as usize] = true;
-    }
+    let mut genetic_image: Vec<u8> = gene_seed.to_owned();
+    let mut skipping: Vec<bool> = gene_seed.iter().map(|u| *u != 255u8).collect();
+
     // set the background
-    current_image[0] = background_idx;
-    genetic_image[0] = background_idx;
+    current_image[0] = genetic_image[0];
     let mut is_cyclops = false;
     let mut is_jawless = false;
 
@@ -2109,17 +2134,51 @@ fn new_gene_impl<S: ReadonlyStorage>(
                 .ok_or_else(|| StdError::generic_err("We just pushed a CatCache!"))?
                 .category
         };
-        let winner = draw_variant(rng, &cat.jawed_weights);
+        let winner = draw_variant(rng, &cat.normal_weights);
         // if we picked an eye type
         if *inits == eye_type_idx {
-            let eye_type: Variant = may_load(&eye_type_var_store, &winner.to_le_bytes())?
-                .ok_or_else(|| StdError::generic_err("Eye Type variant storage is corrupt"))?;
+            let id = StoredLayerId {
+                category: eye_type_idx,
+                variant: winner,
+            };
+            let eye_type = if let Some(et) = var_cache.iter().find(|v| v.id == id) {
+                &et.variant
+            } else {
+                let variant: Variant = may_load(&eye_type_var_store, &winner.to_le_bytes())?
+                    .ok_or_else(|| StdError::generic_err("Eye Type variant storage is corrupt"))?;
+                var_cache.push(VarCache { id, variant });
+                &var_cache
+                    .last()
+                    .ok_or_else(|| StdError::generic_err("We just pushed a VarCache!"))?
+                    .variant
+            };
             is_cyclops = eye_type.name == *"Cyclops";
         } else if *inits == chin_idx {
-            let chin: Variant = may_load(&chin_var_store, &winner.to_le_bytes())?
-                .ok_or_else(|| StdError::generic_err("Chin variant storage is corrupt"))?;
+            let id = StoredLayerId {
+                category: chin_idx,
+                variant: winner,
+            };
+            let chin = if let Some(c) = var_cache.iter().find(|v| v.id == id) {
+                &c.variant
+            } else {
+                let variant: Variant = may_load(&chin_var_store, &winner.to_le_bytes())?
+                    .ok_or_else(|| StdError::generic_err("Chin variant storage is corrupt"))?;
+                var_cache.push(VarCache { id, variant });
+                &var_cache
+                    .last()
+                    .ok_or_else(|| StdError::generic_err("We just pushed a VarCache!"))?
+                    .variant
+            };
             is_jawless = chin.name == *"None";
         }
+        set_dependencies(
+            *inits,
+            winner,
+            depends,
+            &mut genetic_image,
+            Some(&mut current_image),
+            &mut skipping,
+        );
         // archetype traits are revealed immediately
         current_image[*inits as usize] = winner;
         genetic_image[*inits as usize] = winner;
@@ -2165,12 +2224,20 @@ fn new_gene_impl<S: ReadonlyStorage>(
                     .category
             };
             // grab the right weight table
-            let weights = if is_jawless {
-                cat.jawless_weights
-                    .as_ref()
-                    .map_or(&cat.jawed_weights, |w| w)
+            let weights = if let Some(jawless) = cat.jawless_weights.as_ref() {
+                if is_jawless {
+                    jawless
+                } else {
+                    &cat.normal_weights
+                }
+            } else if let Some(cyclops) = cat.cyclops_weights.as_ref() {
+                if is_cyclops {
+                    cyclops
+                } else {
+                    &cat.normal_weights
+                }
             } else {
-                &cat.jawed_weights
+                &cat.normal_weights
             };
             // see if there is a forced variant
             let forced = if is_cyclops {
@@ -2181,8 +2248,10 @@ fn new_gene_impl<S: ReadonlyStorage>(
                 None
             };
             // forced variants are revealed immediately
+            let mut reveal_it: Option<&mut Vec<u8>> = None;
             let winner = if let Some(f) = forced {
                 current_image[idx as usize] = *f;
+                reveal_it = Some(&mut current_image);
                 // don't attempt to reroll a forced variant
                 skipping[idx as usize] = true;
                 *f
@@ -2191,19 +2260,14 @@ fn new_gene_impl<S: ReadonlyStorage>(
             };
             genetic_image[idx as usize] = winner;
             // add additional layers for this trait if necessary
-            let id = StoredLayerId {
-                category: idx,
-                variant: winner,
-            };
-            if let Some(dep) = depends.iter().find(|d| d.id == id) {
-                for multi in dep.correlated.iter() {
-                    genetic_image[multi.category as usize] = multi.variant;
-                    // don't reroll a dependency
-                    skipping[multi.category as usize] = true;
-                }
-                // don't break dependencies by rerolling a trait that had dependencies
-                skipping[idx as usize] = true;
-            }
+            set_dependencies(
+                idx,
+                winner,
+                depends,
+                &mut genetic_image,
+                reveal_it,
+                &mut skipping,
+            );
             // if already rolled every trait, see if you have a unique gene
             if !first_pass {
                 if let Some(unique_check) =
@@ -2215,4 +2279,120 @@ fn new_gene_impl<S: ReadonlyStorage>(
         }
         idx += 1;
     }
+}
+
+/// checks if a rolled variant has dependencies and sets the other variants if necessary
+///
+/// # Arguments
+///
+/// * `category` - category index of the rolled vairant
+/// * `variant` - variant index of the rolled variant
+/// * `depends` - list of traits that have multiple layers
+/// * `genetic` - genetic image indices
+/// * `current` - optional current image indices if the variant should be revealed
+/// * `skipping` - list of which categories to skip when rolling
+fn set_dependencies(
+    category: u8,
+    variant: u8,
+    depends: &[StoredDependencies],
+    genetic: &mut Vec<u8>,
+    current: Option<&mut Vec<u8>>,
+    skipping: &mut Vec<bool>,
+) {
+    let id = StoredLayerId { category, variant };
+    let mut dummy: Vec<u8> = Vec::new();
+    let (reveal, cur) = if let Some(c) = current {
+        (true, c)
+    } else {
+        (false, &mut dummy)
+    };
+    if let Some(dep) = depends.iter().find(|d| d.id == id) {
+        for multi in dep.correlated.iter() {
+            genetic[multi.category as usize] = multi.variant;
+            // also update the current image if desired
+            if reveal {
+                cur[multi.category as usize] = multi.variant;
+            }
+            // don't reroll a dependency
+            skipping[multi.category as usize] = true;
+        }
+        // don't break dependencies by rerolling a trait that had dependencies
+        skipping[category as usize] = true;
+    }
+}
+
+/// Returns StdResult<VariantInfoPlus>
+///
+/// creates the VariantInfoPlus of a specified layer variant
+///
+/// # Arguments
+///
+/// * `storage` - a reference to the contract's storage
+/// * `id` - a reference to the StoredLayerId of the variant to display
+/// * `cat` - a reference to the Category this variant belongs to
+/// * `depends` - list of traits that have multiple layers
+/// * `hiders` - list of variants that hide other variants
+/// * `svgs` - true if svgs should be displayed
+fn displ_variant<S: ReadonlyStorage>(
+    storage: &S,
+    id: &StoredLayerId,
+    cat: &Category,
+    depends: &[StoredDependencies],
+    hiders: &[StoredDependencies],
+    svgs: bool,
+) -> StdResult<VariantInfoPlus> {
+    let var_store =
+        ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &id.category.to_le_bytes()], storage);
+    // see if this variant requires other layer variants
+    let includes = if let Some(dep) = depends.iter().find(|d| d.id == *id) {
+        dep.correlated
+            .iter()
+            .map(|l| l.to_display(storage))
+            .collect::<StdResult<Vec<LayerId>>>()?
+    } else {
+        Vec::new()
+    };
+    // see if this variant hides other layer variants
+    let hides_at_launch = if let Some(dep) = hiders.iter().find(|d| d.id == *id) {
+        dep.correlated
+            .iter()
+            .map(|l| l.to_display(storage))
+            .collect::<StdResult<Vec<LayerId>>>()?
+    } else {
+        Vec::new()
+    };
+    let var: Variant = may_load(&var_store, &id.variant.to_le_bytes())?
+        .ok_or_else(|| StdError::generic_err("Variant storage is corrupt"))?;
+    let var_inf = VariantInfoPlus {
+        index: id.variant,
+        variant_info: VariantInfo {
+            name: var.name,
+            svg: var.svg.filter(|_| svgs),
+            normal_weight: *cat
+                .normal_weights
+                .get(id.variant as usize)
+                .ok_or_else(|| StdError::generic_err("Normal weight table is corrupt"))?,
+            jawless_weight: cat
+                .jawless_weights
+                .as_ref()
+                .map(|w| {
+                    w.get(id.variant as usize)
+                        .cloned()
+                        .ok_or_else(|| StdError::generic_err("Jawless weight table is corrupt"))
+                })
+                .transpose()?,
+            cyclops_weight: cat
+                .cyclops_weights
+                .as_ref()
+                .map(|w| {
+                    w.get(id.variant as usize)
+                        .cloned()
+                        .ok_or_else(|| StdError::generic_err("Cyclops weight table is corrupt"))
+                })
+                .transpose()?,
+        },
+        includes,
+        hides_at_launch,
+    };
+    Ok(var_inf)
 }

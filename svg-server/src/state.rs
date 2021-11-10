@@ -48,10 +48,12 @@ pub struct Category {
     pub forced_cyclops: Option<u8>,
     /// forced variant if jawless
     pub forced_jawless: Option<u8>,
-    /// randomization weight table for jawed
-    pub jawed_weights: Vec<u16>,
+    /// randomization weight table for normal skulls
+    pub normal_weights: Vec<u16>,
     /// randomization weight table for jawless
     pub jawless_weights: Option<Vec<u16>>,
+    /// randomization weight table for cyclops
+    pub cyclops_weights: Option<Vec<u16>>,
 }
 
 /// category variant

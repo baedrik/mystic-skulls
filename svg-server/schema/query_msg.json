@@ -365,13 +365,13 @@
       "description": "creates a new and unique genetic image.  This can only be called by an authorized minter",
       "type": "object",
       "required": [
-        "new_gene"
+        "new_genes"
       ],
       "properties": {
-        "new_gene": {
+        "new_genes": {
           "type": "object",
           "required": [
-            "background",
+            "backgrounds",
             "entropy",
             "height",
             "sender",
@@ -379,9 +379,12 @@
             "viewer"
           ],
           "properties": {
-            "background": {
-              "description": "the name of the background layer variant to use",
-              "type": "string"
+            "backgrounds": {
+              "description": "the names of the background layer variants to use",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "entropy": {
               "description": "entropy for randomization",

@@ -122,8 +122,8 @@ pub enum HandleMsg {
         /// hiders to modify
         hiders: Vec<Dependencies>,
     },
-    /// allow a minter to add a gene to prevent a future duplicate
-    AddGene { gene: Vec<u8> },
+    /// allow a minter to add genes to prevent a future duplicates
+    AddGenes { genes: Vec<Vec<u8>> },
     /// disallow the use of a permit
     RevokePermit {
         /// name of the permit that is no longer valid
@@ -269,7 +269,7 @@ pub enum QueryMsg {
         limit: Option<u16>,
     },
     /// creates a new and unique genetic image.  This can only be called by an authorized minter
-    NewGene {
+    NewGenes {
         /// address and viewing key of a minting contract
         viewer: ViewerInfo,
         /// current block height
@@ -280,8 +280,8 @@ pub enum QueryMsg {
         sender: HumanAddr,
         /// entropy for randomization
         entropy: String,
-        /// the name of the background layer variant to use
-        background: String,
+        /// the names of the background layer variants to use
+        backgrounds: Vec<String>,
     },
     /// generates metadata from the input image vector
     TokenMetadata {
@@ -356,14 +356,19 @@ pub enum QueryAnswer {
         count: u16,
         hiders: Vec<Dependencies>,
     },
-    /// response from creating a new genetic image
-    NewGene {
-        current_image: Vec<u8>,
-        /// complete genetic image
-        genetic_image: Vec<u8>,
-        /// image used for uniqueness checks
-        unique_check: Vec<u8>,
-    },
+    /// response from creating a new genetic images
+    NewGenes { genes: Vec<GeneInfo> },
+}
+
+/// genetic image information
+#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug)]
+pub struct GeneInfo {
+    /// image at time of minting
+    pub current_image: Vec<u8>,
+    /// complete genetic image
+    pub genetic_image: Vec<u8>,
+    /// image used for uniqueness checks
+    pub unique_check: Vec<u8>,
 }
 
 /// trait variant information
@@ -373,10 +378,12 @@ pub struct VariantInfo {
     pub name: String,
     /// svg data if name is not `None`
     pub svg: Option<String>,
-    /// randomization weight for this trait variant if jawed
-    pub jawed_weight: u16,
+    /// randomization weight for this trait variant if skull has 2 eyes and a jaw
+    pub normal_weight: u16,
     /// randomization weight for this variant if jawless
     pub jawless_weight: Option<u16>,
+    /// randomization weight for cyclops
+    pub cyclops_weight: Option<u16>,
 }
 
 /// trait variant information with its index and dependencies
@@ -426,10 +433,12 @@ pub struct VariantModification {
 /// randomization weights
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug)]
 pub struct Weights {
-    /// randomization weight table for jawed
-    pub jawed_weights: Vec<u16>,
+    /// normal radomization weight table
+    pub normal_weights: Vec<u16>,
     /// randomization weight table for jawless
     pub jawless_weights: Option<Vec<u16>>,
+    /// randomization weight table for cyclops
+    pub cyclops_weights: Option<Vec<u16>>,
 }
 
 /// forced variants
