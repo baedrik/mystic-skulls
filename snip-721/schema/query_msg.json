@@ -722,6 +722,26 @@
           }
         }
       }
+    },
+    {
+      "description": "debug to view complete image",
+      "type": "object",
+      "required": [
+        "debug"
+      ],
+      "properties": {
+        "debug": {
+          "type": "object",
+          "required": [
+            "token_id"
+          ],
+          "properties": {
+            "token_id": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
