@@ -1,26 +1,59 @@
 #[cfg(test)]
 mod tests {
     use crate::contract::{handle, init, query};
+    use crate::contract_info::ContractInfo;
     use crate::expiration::Expiration;
+    use crate::image::ImageInfo;
     use crate::msg::{
         AccessLevel, Cw721Approval, HandleMsg, InitConfig, InitMsg, QueryAnswer, QueryMsg,
         Snip721Approval, Tx, TxAction, ViewerInfo,
     };
+    use crate::server_msgs::{TokenMetadata, TokenMetadataResponse};
     use crate::token::{Extension, Metadata};
     use cosmwasm_std::testing::*;
     use cosmwasm_std::{
-        from_binary, Binary, BlockInfo, Env, Extern, HumanAddr, InitResponse, MessageInfo,
-        StdError, StdResult,
+        from_binary, to_binary, Binary, BlockInfo, Env, Extern, HumanAddr, InitResponse,
+        MessageInfo, Querier, QuerierResult, StdError, StdResult,
     };
     use std::any::Any;
 
     // Helper functions
 
-    fn init_helper_default() -> (
+    pub struct MockQuerier {
+        public: Option<Metadata>,
+        private: Option<Metadata>,
+    }
+
+    impl Querier for MockQuerier {
+        fn raw_query(&self, _request: &[u8]) -> QuerierResult {
+            Ok(to_binary(&TokenMetadataResponse {
+                metadata: TokenMetadata {
+                    public_metadata: self.public.clone(),
+                    private_metadata: self.private.clone(),
+                },
+            }))
+        }
+    }
+
+    pub fn my_mock_dependencies(
+        public: Option<Metadata>,
+        private: Option<Metadata>,
+    ) -> Extern<MockStorage, MockApi, MockQuerier> {
+        Extern {
+            storage: MockStorage::default(),
+            api: MockApi::new(20),
+            querier: MockQuerier { public, private },
+        }
+    }
+
+    fn init_helper_default(
+        public: Option<Metadata>,
+        private: Option<Metadata>,
+    ) -> (
         StdResult<InitResponse>,
         Extern<MockStorage, MockApi, MockQuerier>,
     ) {
-        let mut deps = mock_dependencies(20, &[]);
+        let mut deps = my_mock_dependencies(public, private);
         let env = mock_env("instantiator", &[]);
 
         let init_msg = InitMsg {
@@ -38,6 +71,8 @@ mod tests {
     }
 
     fn init_helper_with_config(
+        public: Option<Metadata>,
+        private: Option<Metadata>,
         public_token_supply: bool,
         public_owner: bool,
         enable_sealed_metadata: bool,
@@ -49,7 +84,7 @@ mod tests {
         StdResult<InitResponse>,
         Extern<MockStorage, MockApi, MockQuerier>,
     ) {
-        let mut deps = mock_dependencies(20, &[]);
+        let mut deps = my_mock_dependencies(public, private);
 
         let env = mock_env("instantiator", &[]);
         let init_config: InitConfig = from_binary(&Binary::from(
@@ -99,7 +134,7 @@ mod tests {
     // test ContractInfo query
     #[test]
     fn test_query_contract_info() {
-        let (init_result, deps) = init_helper_default();
+        let (init_result, deps) = init_helper_default(None, None);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -126,7 +161,7 @@ mod tests {
     #[test]
     fn test_query_contract_config() {
         let (init_result, deps) =
-            init_helper_with_config(false, true, true, false, true, false, true);
+            init_helper_with_config(None, None, false, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -165,7 +200,7 @@ mod tests {
     // test minters query
     #[test]
     fn test_query_minters() {
-        let (init_result, mut deps) = init_helper_default();
+        let (init_result, mut deps) = init_helper_default(None, None);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -211,7 +246,7 @@ mod tests {
     #[test]
     fn test_query_num_tokens() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, true, true, false, true, false, true);
+            init_helper_with_config(None, None, false, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -232,6 +267,12 @@ mod tests {
             }),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -251,6 +292,12 @@ mod tests {
             }),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -317,7 +364,7 @@ mod tests {
 
         // test token supply public
         let (init_result, mut deps) =
-            init_helper_with_config(true, true, true, false, true, false, true);
+            init_helper_with_config(None, None, true, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -338,6 +385,12 @@ mod tests {
             }),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -357,6 +410,12 @@ mod tests {
             }),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -388,7 +447,7 @@ mod tests {
     #[test]
     fn test_query_all_tokens() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, true, true, false, true, false, true);
+            init_helper_with_config(None, None, false, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -410,6 +469,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -427,6 +492,12 @@ mod tests {
                 }),
             }),
             private_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -447,6 +518,12 @@ mod tests {
             }),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -522,12 +599,20 @@ mod tests {
 
         // test token supply public, with pagination starting after NFT2
         let (init_result, mut deps) =
-            init_helper_with_config(true, true, true, false, true, false, true);
+            init_helper_with_config(None, None, true, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
             init_result.err().unwrap()
         );
+        let handle_msg = HandleMsg::AddSvgServer {
+            svg_server: ContractInfo {
+                address: HumanAddr("server".to_string()),
+                code_hash: "hash".to_string(),
+            },
+            padding: None,
+        };
+        let _handle_result = handle(&mut deps, mock_env("admin", &[]), handle_msg);
 
         let handle_msg = HandleMsg::MintNft {
             token_id: Some("NFT1".to_string()),
@@ -543,6 +628,12 @@ mod tests {
             }),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -562,6 +653,12 @@ mod tests {
             }),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -581,6 +678,12 @@ mod tests {
             }),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -600,6 +703,12 @@ mod tests {
             }),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -619,6 +728,12 @@ mod tests {
             }),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -696,7 +811,7 @@ mod tests {
     #[test]
     fn test_query_nft_dossier() {
         let (init_result, deps) =
-            init_helper_with_config(true, true, true, false, true, false, true);
+            init_helper_with_config(None, None, true, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -714,12 +829,20 @@ mod tests {
         assert!(error.contains("Token ID: NFT1 not found"));
 
         let (init_result, mut deps) =
-            init_helper_with_config(false, true, true, false, true, false, true);
+            init_helper_with_config(None, None, false, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
             init_result.err().unwrap()
         );
+        let handle_msg = HandleMsg::AddSvgServer {
+            svg_server: ContractInfo {
+                address: HumanAddr("server".to_string()),
+                code_hash: "hash".to_string(),
+            },
+            padding: None,
+        };
+        let _handle_result = handle(&mut deps, mock_env("admin", &[]), handle_msg);
 
         // test token not found when supply is private
         let query_msg = QueryMsg::NftDossier {
@@ -758,6 +881,12 @@ mod tests {
             owner: Some(alice.clone()),
             public_metadata: Some(public_meta.clone()),
             private_metadata: Some(private_meta.clone()),
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -805,6 +934,15 @@ mod tests {
             handle_msg,
         );
 
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                description: Some("PubDesc1".to_string()),
+                image: Some("PubUri1".to_string()),
+                ..Extension::default()
+            }),
+        };
         // test viewer not given, contract has public ownership
         let query_msg = QueryMsg::NftDossier {
             token_id: "NFT1".to_string(),
@@ -829,7 +967,7 @@ mod tests {
                 inventory_approvals,
             } => {
                 assert_eq!(owner, Some(alice.clone()));
-                assert_eq!(public_metadata, Some(public_meta.clone()));
+                assert_eq!(public_metadata, Some(pub1plus.clone()));
                 assert!(private_metadata.is_none());
                 assert_eq!(
                     display_private_metadata_error,
@@ -848,12 +986,20 @@ mod tests {
         // test viewer not given, contract has private ownership, but token ownership
         // and private metadata was made public
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, false, false, false, false, false);
+            init_helper_with_config(None, None, false, false, false, false, false, false, false);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
             init_result.err().unwrap()
         );
+        let handle_msg = HandleMsg::AddSvgServer {
+            svg_server: ContractInfo {
+                address: HumanAddr("server".to_string()),
+                code_hash: "hash".to_string(),
+            },
+            padding: None,
+        };
+        let _handle_result = handle(&mut deps, mock_env("admin", &[]), handle_msg);
 
         let handle_msg = HandleMsg::MintNft {
             token_id: Some("NFT1".to_string()),
@@ -861,6 +1007,12 @@ mod tests {
             public_metadata: Some(public_meta.clone()),
             private_metadata: Some(private_meta.clone()),
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -928,7 +1080,7 @@ mod tests {
                 inventory_approvals,
             } => {
                 assert_eq!(owner, Some(alice.clone()));
-                assert_eq!(public_metadata, Some(public_meta.clone()));
+                assert_eq!(public_metadata, Some(pub1plus.clone()));
                 assert_eq!(private_metadata, Some(private_meta.clone()));
                 assert!(display_private_metadata_error.is_none());
                 assert!(owner_is_public);
@@ -1025,7 +1177,7 @@ mod tests {
                 inventory_approvals,
             } => {
                 assert_eq!(owner, Some(alice.clone()));
-                assert_eq!(public_metadata, Some(public_meta.clone()));
+                assert_eq!(public_metadata, Some(pub1plus.clone()));
                 assert_eq!(private_metadata, Some(private_meta.clone()));
                 assert!(display_private_metadata_error.is_none());
                 assert!(owner_is_public);
@@ -1125,7 +1277,7 @@ mod tests {
                 inventory_approvals,
             } => {
                 assert_eq!(owner, Some(alice.clone()));
-                assert_eq!(public_metadata, Some(public_meta.clone()));
+                assert_eq!(public_metadata, Some(pub1plus.clone()));
                 assert_eq!(private_metadata, Some(private_meta.clone()));
                 assert!(display_private_metadata_error.is_none());
                 assert!(!owner_is_public);
@@ -1167,7 +1319,7 @@ mod tests {
                 inventory_approvals,
             } => {
                 assert_eq!(owner, Some(alice.clone()));
-                assert_eq!(public_metadata, Some(public_meta.clone()));
+                assert_eq!(public_metadata, Some(pub1plus.clone()));
                 assert_eq!(private_metadata, Some(private_meta.clone()));
                 assert!(display_private_metadata_error.is_none());
                 assert!(!owner_is_public);
@@ -1201,18 +1353,32 @@ mod tests {
         assert!(error.contains("Wrong viewing key for this address or viewing key not set"));
 
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, true, true, true, false, true);
+            init_helper_with_config(None, None, false, false, true, true, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
             init_result.err().unwrap()
         );
+        let handle_msg = HandleMsg::AddSvgServer {
+            svg_server: ContractInfo {
+                address: HumanAddr("server".to_string()),
+                code_hash: "hash".to_string(),
+            },
+            padding: None,
+        };
+        let _handle_result = handle(&mut deps, mock_env("admin", &[]), handle_msg);
         let handle_msg = HandleMsg::MintNft {
             token_id: Some("NFT1".to_string()),
             owner: Some(alice.clone()),
             public_metadata: Some(public_meta.clone()),
             private_metadata: Some(private_meta.clone()),
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1295,7 +1461,7 @@ mod tests {
                 inventory_approvals,
             } => {
                 assert_eq!(owner, Some(alice.clone()));
-                assert_eq!(public_metadata, Some(public_meta.clone()));
+                assert_eq!(public_metadata, Some(pub1plus.clone()));
                 assert!(private_metadata.is_none());
                 assert_eq!(display_private_metadata_error, Some("Sealed metadata must be unwrapped by calling Reveal before it can be viewed".to_string()));
                 assert!(!owner_is_public);
@@ -1346,7 +1512,7 @@ mod tests {
                 inventory_approvals,
             } => {
                 assert!(owner.is_none());
-                assert_eq!(public_metadata, Some(public_meta.clone()));
+                assert_eq!(public_metadata, Some(pub1plus.clone()));
                 assert!(private_metadata.is_none());
                 assert_eq!(
                     display_private_metadata_error,
@@ -1367,7 +1533,7 @@ mod tests {
     #[test]
     fn test_query_tokens() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, true, false, false, true, false, true);
+            init_helper_with_config(None, None, false, true, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -1392,6 +1558,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1402,6 +1574,12 @@ mod tests {
             owner: Some(HumanAddr("alice".to_string())),
             public_metadata: None,
             private_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -1414,6 +1592,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1426,6 +1610,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -1436,6 +1626,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1447,6 +1643,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1458,6 +1660,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1468,6 +1676,12 @@ mod tests {
             owner: Some(HumanAddr("charlie".to_string())),
             public_metadata: None,
             private_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -1686,7 +1900,7 @@ mod tests {
         }
 
         // contract with private ownership
-        let (init_result, mut deps) = init_helper_default();
+        let (init_result, mut deps) = init_helper_default(None, None);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -1715,6 +1929,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1726,6 +1946,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1737,6 +1963,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1748,6 +1980,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1759,6 +1997,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1770,6 +2014,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1781,6 +2031,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1792,6 +2048,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1803,6 +2065,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -1943,7 +2211,7 @@ mod tests {
     #[test]
     fn test_is_unwrapped() {
         let (init_result, deps) =
-            init_helper_with_config(true, true, false, false, true, false, true);
+            init_helper_with_config(None, None, true, true, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -1959,7 +2227,7 @@ mod tests {
         assert!(error.contains("Token ID: NFT1 not found"));
 
         let (init_result, deps) =
-            init_helper_with_config(false, true, false, false, true, false, true);
+            init_helper_with_config(None, None, false, true, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -1980,7 +2248,7 @@ mod tests {
         }
 
         let (init_result, mut deps) =
-            init_helper_with_config(false, true, true, false, true, false, true);
+            init_helper_with_config(None, None, false, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -2004,6 +2272,12 @@ mod tests {
             owner: Some(HumanAddr("alice".to_string())),
             public_metadata: None,
             private_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -2048,7 +2322,7 @@ mod tests {
     #[test]
     fn test_owner_of() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, true, false, false, true, false, true);
+            init_helper_with_config(None, None, false, true, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -2061,6 +2335,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -2120,7 +2400,7 @@ mod tests {
         }
 
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, false, false, true, false, true);
+            init_helper_with_config(None, None, false, false, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -2133,6 +2413,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -2333,7 +2619,7 @@ mod tests {
     #[test]
     fn test_nft_info() {
         let (init_result, deps) =
-            init_helper_with_config(true, true, false, false, true, false, true);
+            init_helper_with_config(None, None, true, true, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -2349,13 +2635,20 @@ mod tests {
         assert!(error.contains("Token ID: NFT1 not found"));
 
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, false, false, true, false, true);
+            init_helper_with_config(None, None, false, false, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
             init_result.err().unwrap()
         );
-
+        let handle_msg = HandleMsg::AddSvgServer {
+            svg_server: ContractInfo {
+                address: HumanAddr("server".to_string()),
+                code_hash: "hash".to_string(),
+            },
+            padding: None,
+        };
+        let _handle_result = handle(&mut deps, mock_env("admin", &[]), handle_msg);
         // test token not found when supply is public
         let query_msg = QueryMsg::NftInfo {
             token_id: "NFT1".to_string(),
@@ -2383,12 +2676,24 @@ mod tests {
             public_metadata: Some(public_meta.clone()),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
         };
         let _handle_result = handle(&mut deps, mock_env("admin", &[]), handle_msg);
-
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                ..Extension::default()
+            }),
+        };
         // sanity check
         let query_msg = QueryMsg::NftInfo {
             token_id: "NFT1".to_string(),
@@ -2400,8 +2705,8 @@ mod tests {
                 token_uri,
                 extension,
             } => {
-                assert_eq!(token_uri, public_meta.token_uri);
-                assert_eq!(extension, public_meta.extension);
+                assert_eq!(token_uri, pub1plus.token_uri);
+                assert_eq!(extension, pub1plus.extension);
             }
             _ => panic!("unexpected"),
         }
@@ -2411,7 +2716,7 @@ mod tests {
     #[test]
     fn test_all_nft_info() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, false, false, true, false, true);
+            init_helper_with_config(None, None, false, false, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -2449,9 +2754,15 @@ mod tests {
         let handle_msg = HandleMsg::MintNft {
             token_id: Some("NFTfail".to_string()),
             owner: Some(alice.clone()),
-            public_metadata: Some(meta_for_fail.clone()),
-            private_metadata: None,
+            private_metadata: Some(meta_for_fail.clone()),
+            public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -2460,11 +2771,26 @@ mod tests {
         let error = extract_error_msg(handle_result);
         assert!(error.contains("Metadata can not have BOTH token_uri AND extension"));
 
+        let handle_msg = HandleMsg::AddSvgServer {
+            svg_server: ContractInfo {
+                address: HumanAddr("server".to_string()),
+                code_hash: "hash".to_string(),
+            },
+            padding: None,
+        };
+        let _handle_result = handle(&mut deps, mock_env("admin", &[]), handle_msg);
+
         let handle_msg = HandleMsg::MintNft {
             token_id: Some("NFT1".to_string()),
             owner: Some(alice.clone()),
             public_metadata: Some(public_meta.clone()),
             private_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -2482,6 +2808,15 @@ mod tests {
         };
         let _handle_result = handle(&mut deps, mock_env("alice", &[]), handle_msg);
 
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                description: Some("PubDesc1".to_string()),
+                image: Some("PubUri1".to_string()),
+                ..Extension::default()
+            }),
+        };
         // test don't have permission to view owner, but should still be able to see
         // public metadata
         let query_msg = QueryMsg::AllNftInfo {
@@ -2495,7 +2830,7 @@ mod tests {
             QueryAnswer::AllNftInfo { access, info } => {
                 assert!(access.owner.is_none());
                 assert!(access.approvals.is_empty());
-                assert_eq!(info, Some(public_meta.clone()));
+                assert_eq!(info, Some(pub1plus.clone()));
             }
             _ => panic!("unexpected"),
         }
@@ -2506,6 +2841,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -2521,7 +2862,13 @@ mod tests {
             padding: None,
         };
         let _handle_result = handle(&mut deps, mock_env("alice", &[]), handle_msg);
-
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #2".to_string()),
+                ..Extension::default()
+            }),
+        };
         // test owner viewing all nft info, the is no public metadata
         let query_msg = QueryMsg::AllNftInfo {
             token_id: "NFT2".to_string(),
@@ -2537,7 +2884,7 @@ mod tests {
             QueryAnswer::AllNftInfo { access, info } => {
                 assert_eq!(access.owner, Some(alice.clone()));
                 assert_eq!(access.approvals.len(), 1);
-                assert!(info.is_none());
+                assert_eq!(info.unwrap(), pub1plus.clone());
             }
             _ => panic!("unexpected"),
         }
@@ -2547,7 +2894,7 @@ mod tests {
     #[test]
     fn test_private_metadata() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, false, false, true, false, true);
+            init_helper_with_config(None, None, false, false, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -2559,6 +2906,14 @@ mod tests {
             padding: None,
         };
         let _handle_result = handle(&mut deps, mock_env("alice", &[]), handle_msg);
+        let handle_msg = HandleMsg::AddSvgServer {
+            svg_server: ContractInfo {
+                address: HumanAddr("server".to_string()),
+                code_hash: "hash".to_string(),
+            },
+            padding: None,
+        };
+        let _handle_result = handle(&mut deps, mock_env("admin", &[]), handle_msg);
 
         let private_meta = Metadata {
             token_uri: None,
@@ -2574,6 +2929,12 @@ mod tests {
             owner: Some(alice.clone()),
             public_metadata: None,
             private_metadata: Some(private_meta.clone()),
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -2636,12 +2997,21 @@ mod tests {
         }
 
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, true, false, true, false, true);
+            init_helper_with_config(None, None, false, false, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
             init_result.err().unwrap()
         );
+        let handle_msg = HandleMsg::AddSvgServer {
+            svg_server: ContractInfo {
+                address: HumanAddr("server".to_string()),
+                code_hash: "hash".to_string(),
+            },
+            padding: None,
+        };
+        let _handle_result = handle(&mut deps, mock_env("admin", &[]), handle_msg);
+
         let alice = HumanAddr("alice".to_string());
         let bob = HumanAddr("bob".to_string());
         let handle_msg = HandleMsg::SetViewingKey {
@@ -2670,6 +3040,12 @@ mod tests {
             public_metadata: None,
             private_metadata: Some(private_meta.clone()),
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -2733,7 +3109,7 @@ mod tests {
     #[test]
     fn test_approved_for_all() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, false, false, true, false, true);
+            init_helper_with_config(None, None, false, false, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -2805,7 +3181,7 @@ mod tests {
     #[test]
     fn test_token_approvals() {
         let (init_result, deps) =
-            init_helper_with_config(true, true, true, false, true, false, true);
+            init_helper_with_config(None, None, true, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -2826,7 +3202,7 @@ mod tests {
         assert!(error.contains("Token ID: NFT1 not found"));
 
         let (init_result, mut deps) =
-            init_helper_with_config(false, true, true, false, true, false, true);
+            init_helper_with_config(None, None, false, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -2854,6 +3230,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -3067,7 +3449,7 @@ mod tests {
     #[test]
     fn test_inventory_approvals() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, true, false, false, true, false, true);
+            init_helper_with_config(None, None, false, true, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -3141,7 +3523,7 @@ mod tests {
         }
 
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, false, false, true, false, true);
+            init_helper_with_config(None, None, false, false, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -3242,7 +3624,7 @@ mod tests {
     #[test]
     fn test_verify_transfer_approval() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, false, false, true, false, true);
+            init_helper_with_config(None, None, false, false, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -3272,6 +3654,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -3283,6 +3671,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -3294,6 +3688,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -3305,6 +3705,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -3316,6 +3722,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -3418,7 +3830,7 @@ mod tests {
     #[test]
     fn test_transaction_history() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, false, false, false, true, false, true);
+            init_helper_with_config(None, None, false, false, false, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",
@@ -3461,6 +3873,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -3472,6 +3890,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: Some("Mint 2".to_string()),
             padding: None,
@@ -3613,7 +4037,7 @@ mod tests {
     #[test]
     fn test_query_registered_code_hash() {
         let (init_result, mut deps) =
-            init_helper_with_config(false, true, true, false, true, false, true);
+            init_helper_with_config(None, None, false, true, true, false, true, false, true);
         assert!(
             init_result.is_ok(),
             "Init failed: {}",

@@ -1,28 +1,51 @@
 #[cfg(test)]
 mod tests {
     use crate::contract::{handle, init, query};
+    use crate::contract_info::ContractInfo;
+    use crate::image::ImageInfo;
     use crate::msg::{
         AccessLevel, ContractStatus, HandleMsg, InitConfig, InitMsg, PostInitCallback, QueryAnswer,
         QueryMsg, ViewerInfo,
     };
     use crate::royalties::{DisplayRoyalty, DisplayRoyaltyInfo, Royalty, RoyaltyInfo};
+    use crate::server_msgs::{TokenMetadata, TokenMetadataResponse};
     use crate::state::{load, Config, ADMINS_KEY, CONFIG_KEY};
     use cosmwasm_std::testing::*;
     use cosmwasm_std::{
         from_binary, to_binary, Api, Binary, CanonicalAddr, Coin, CosmosMsg, Extern, HumanAddr,
-        InitResponse, StdError, StdResult, Uint128, WasmMsg,
+        InitResponse, Querier, QuerierResult, StdError, StdResult, Uint128, WasmMsg,
     };
     use std::any::Any;
 
     // Helper functions
 
+    pub struct MockQuerier {}
+
+    impl Querier for MockQuerier {
+        fn raw_query(&self, _request: &[u8]) -> QuerierResult {
+            Ok(to_binary(&TokenMetadataResponse {
+                metadata: TokenMetadata {
+                    public_metadata: None,
+                    private_metadata: None,
+                },
+            }))
+        }
+    }
+
+    pub fn my_mock_dependencies() -> Extern<MockStorage, MockApi, MockQuerier> {
+        Extern {
+            storage: MockStorage::default(),
+            api: MockApi::new(20),
+            querier: MockQuerier {},
+        }
+    }
     fn init_helper_royalties(
         royalty_info: Option<RoyaltyInfo>,
     ) -> (
         StdResult<InitResponse>,
         Extern<MockStorage, MockApi, MockQuerier>,
     ) {
-        let mut deps = mock_dependencies(20, &[]);
+        let mut deps = my_mock_dependencies();
         let env = mock_env("instantiator", &[]);
 
         let init_msg = InitMsg {
@@ -52,7 +75,7 @@ mod tests {
         StdResult<InitResponse>,
         Extern<MockStorage, MockApi, MockQuerier>,
     ) {
-        let mut deps = mock_dependencies(20, &[]);
+        let mut deps = my_mock_dependencies();
 
         let env = mock_env("instantiator", &[]);
         let init_config: InitConfig = from_binary(&Binary::from(
@@ -608,6 +631,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -655,6 +684,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: Some(individual.clone()),
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -691,6 +726,15 @@ mod tests {
             }
             _ => panic!("unexpected"),
         }
+
+        let handle_msg = HandleMsg::AddSvgServer {
+            svg_server: ContractInfo {
+                address: HumanAddr("server".to_string()),
+                code_hash: "hash".to_string(),
+            },
+            padding: None,
+        };
+        let _handle_result = handle(&mut deps, mock_env("admin", &[]), handle_msg);
 
         // verify nft_dossier also hides addresses
         let query_msg = QueryMsg::NftDossier {

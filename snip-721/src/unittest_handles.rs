@@ -3,6 +3,7 @@ mod tests {
     use crate::contract::{check_permission, handle, init, query};
     use crate::contract_info::{ContractInfo, StoreContractInfo};
     use crate::expiration::Expiration;
+    use crate::image::ImageInfo;
     use crate::inventory::Inventory;
     use crate::msg::{
         AccessLevel, Burn, ContractStatus, HandleAnswer, HandleMsg, InitConfig, InitMsg, Mint,
@@ -266,6 +267,12 @@ mod tests {
                 private_metadata: None,
                 royalty_info: None,
                 serial_number: None,
+                image_info: ImageInfo {
+                    current: vec![],
+                    previous: vec![],
+                    natural: vec![],
+                    svg_server: None,
+                },
                 memo: None,
             },
             Mint {
@@ -275,6 +282,12 @@ mod tests {
                 private_metadata: Some(priv2.clone()),
                 royalty_info: None,
                 serial_number: None,
+                image_info: ImageInfo {
+                    current: vec![],
+                    previous: vec![],
+                    natural: vec![],
+                    svg_server: None,
+                },
                 memo: None,
             },
             Mint {
@@ -284,6 +297,12 @@ mod tests {
                 private_metadata: None,
                 royalty_info: None,
                 serial_number: None,
+                image_info: ImageInfo {
+                    current: vec![],
+                    previous: vec![],
+                    natural: vec![],
+                    svg_server: None,
+                },
                 memo: None,
             },
             Mint {
@@ -293,6 +312,12 @@ mod tests {
                 private_metadata: None,
                 royalty_info: None,
                 serial_number: None,
+                image_info: ImageInfo {
+                    current: vec![],
+                    previous: vec![],
+                    natural: vec![],
+                    svg_server: None,
+                },
                 memo: Some("has id 3".to_string()),
             },
         ];
@@ -380,9 +405,25 @@ mod tests {
         // verify the token metadata
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta1: Metadata = load(&pub_store, &token_key1).unwrap();
-        assert_eq!(pub_meta1, pub1);
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                description: Some("pub1".to_string()),
+                image: Some("uri1".to_string()),
+                ..Extension::default()
+            }),
+        };
+        let pub2plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #2".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta1, pub1plus);
         let pub_meta2: Option<Metadata> = may_load(&pub_store, &token_key2).unwrap();
-        assert!(pub_meta2.is_none());
+        assert_eq!(pub_meta2.unwrap(), pub2plus);
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta1: Option<Metadata> = may_load(&priv_store, &token_key1).unwrap();
         assert!(priv_meta1.is_none());
@@ -446,6 +487,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -463,7 +510,7 @@ mod tests {
         let handle_msg = HandleMsg::MintNft {
             token_id: Some("MyNFT".to_string()),
             owner: Some(HumanAddr("alice".to_string())),
-            public_metadata: Some(Metadata {
+            private_metadata: Some(Metadata {
                 token_uri: Some("uri".to_string()),
                 extension: Some(Extension {
                     name: Some("MyNFT".to_string()),
@@ -472,9 +519,15 @@ mod tests {
                     ..Extension::default()
                 }),
             }),
-            private_metadata: None,
+            public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -498,6 +551,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -537,6 +596,12 @@ mod tests {
             private_metadata: priv_expect.clone(),
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -567,7 +632,15 @@ mod tests {
         // verify the token metadata
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &token_key).unwrap();
-        assert_eq!(pub_meta, pub_expect.unwrap());
+        let pub2plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                image: Some("uri".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub2plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Metadata = load(&priv_store, &token_key).unwrap();
         assert_eq!(priv_meta, priv_expect.unwrap());
@@ -613,6 +686,12 @@ mod tests {
             }),
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -637,6 +716,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Admin wants his own".to_string()),
             padding: None,
         };
@@ -671,7 +756,14 @@ mod tests {
         // verify metadata
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &token_key).unwrap();
-        assert_eq!(pub_meta, pub_expect.unwrap());
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #2".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub1plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &token_key).unwrap();
         assert!(priv_meta.is_none());
@@ -802,6 +894,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -868,6 +966,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -912,6 +1016,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -992,6 +1102,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -1021,6 +1137,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -1203,6 +1325,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -1228,7 +1356,15 @@ mod tests {
         assert_eq!(priv_meta, priv_expect.unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &token_key).unwrap();
-        assert_eq!(pub_meta, pub_expect.unwrap());
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                image: Some("uri".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub1plus);
     }
 
     // test Reveal
@@ -1297,6 +1433,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -1350,6 +1492,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -1405,6 +1553,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -1419,7 +1573,14 @@ mod tests {
         assert_eq!(priv_meta, seal_meta.unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Option<Metadata> = may_load(&pub_store, &token_key).unwrap();
-        assert!(pub_meta.is_none());
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta.unwrap(), pub1plus);
     }
 
     // test owner setting approval for specific addresses
@@ -1485,6 +1646,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -1505,6 +1672,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -1525,6 +1698,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -1545,6 +1724,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -1682,7 +1867,16 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft1_key).unwrap();
-        assert_eq!(pub_meta, pub1.clone().unwrap());
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                description: Some("Public 1".to_string()),
+                image: Some("URI 1".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub1plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft1_key).unwrap();
         assert!(priv_meta.is_none());
@@ -1738,7 +1932,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft1_key).unwrap();
-        assert_eq!(pub_meta, pub1.clone().unwrap());
+        assert_eq!(pub_meta, pub1plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft1_key).unwrap();
         assert!(priv_meta.is_none());
@@ -1793,7 +1987,16 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft2_key).unwrap();
-        assert_eq!(pub_meta, pub2.clone().unwrap());
+        let pub2plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #2".to_string()),
+                description: Some("Public 2".to_string()),
+                image: Some("URI 2".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub2plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft2_key).unwrap();
         assert!(priv_meta.is_none());
@@ -1958,7 +2161,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft2_key).unwrap();
-        assert_eq!(pub_meta, pub2.clone().unwrap());
+        assert_eq!(pub_meta, pub2plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft2_key).unwrap();
         assert!(priv_meta.is_none());
@@ -2070,7 +2273,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft1_key).unwrap();
-        assert_eq!(pub_meta, pub1.clone().unwrap());
+        assert_eq!(pub_meta, pub1plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft1_key).unwrap();
         assert!(priv_meta.is_none());
@@ -2107,7 +2310,16 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft3_key).unwrap();
-        assert_eq!(pub_meta, pub3.clone().unwrap());
+        let pub3plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #3".to_string()),
+                description: Some("Public 3".to_string()),
+                image: Some("URI 3".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub3plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft3_key).unwrap();
         assert!(priv_meta.is_none());
@@ -2210,7 +2422,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft1_key).unwrap();
-        assert_eq!(pub_meta, pub1.clone().unwrap());
+        assert_eq!(pub_meta, pub1plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft1_key).unwrap();
         assert!(priv_meta.is_none());
@@ -2241,7 +2453,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft3_key).unwrap();
-        assert_eq!(pub_meta, pub3.clone().unwrap());
+        assert_eq!(pub_meta, pub3plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft3_key).unwrap();
         assert!(priv_meta.is_none());
@@ -2326,7 +2538,16 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft4_key).unwrap();
-        assert_eq!(pub_meta, pub4.clone().unwrap());
+        let pub4plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #4".to_string()),
+                description: Some("Public 4".to_string()),
+                image: Some("URI 4".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub4plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft4_key).unwrap();
         assert!(priv_meta.is_none());
@@ -2446,7 +2667,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft3_key).unwrap();
-        assert_eq!(pub_meta, pub3.clone().unwrap());
+        assert_eq!(pub_meta, pub3plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft3_key).unwrap();
         assert!(priv_meta.is_none());
@@ -2556,7 +2777,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft3_key).unwrap();
-        assert_eq!(pub_meta, pub3.clone().unwrap());
+        assert_eq!(pub_meta, pub3plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft3_key).unwrap();
         assert!(priv_meta.is_none());
@@ -2668,7 +2889,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft4_key).unwrap();
-        assert_eq!(pub_meta, pub4.clone().unwrap());
+        assert_eq!(pub_meta, pub4plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft3_key).unwrap();
         assert!(priv_meta.is_none());
@@ -2810,7 +3031,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft1_key).unwrap();
-        assert_eq!(pub_meta, pub1.clone().unwrap());
+        assert_eq!(pub_meta, pub1plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft1_key).unwrap();
         assert!(priv_meta.is_none());
@@ -2859,7 +3080,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft3_key).unwrap();
-        assert_eq!(pub_meta, pub3.clone().unwrap());
+        assert_eq!(pub_meta, pub3plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft3_key).unwrap();
         assert!(priv_meta.is_none());
@@ -3337,7 +3558,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft3_key).unwrap();
-        assert_eq!(pub_meta, pub3.clone().unwrap());
+        assert_eq!(pub_meta, pub3plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft3_key).unwrap();
         assert!(priv_meta.is_none());
@@ -3381,7 +3602,7 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft3_key).unwrap();
-        assert_eq!(pub_meta, pub3.clone().unwrap());
+        assert_eq!(pub_meta, pub3plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft3_key).unwrap();
         assert!(priv_meta.is_none());
@@ -3454,6 +3675,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -3659,7 +3886,14 @@ mod tests {
         assert_eq!(priv_meta, priv_expect.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Option<Metadata> = may_load(&pub_store, &tok_key).unwrap();
-        assert!(pub_meta.is_none());
+        let pub2plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta.unwrap(), pub2plus.clone());
         assert_eq!(token.permissions.len(), 1);
         let charlie_tok_perm = token
             .permissions
@@ -3723,7 +3957,7 @@ mod tests {
         assert_eq!(priv_meta, priv_expect.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Option<Metadata> = may_load(&pub_store, &tok_key).unwrap();
-        assert!(pub_meta.is_none());
+        assert_eq!(pub_meta.unwrap(), pub2plus.clone());
         assert_eq!(token.permissions.len(), 2);
         let bob_tok_perm = token
             .permissions
@@ -3764,6 +3998,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -3783,6 +4023,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -3875,7 +4121,14 @@ mod tests {
         assert_eq!(priv_meta, priv2.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Option<Metadata> = may_load(&pub_store, &tok2_key).unwrap();
-        assert!(pub_meta.is_none());
+        let pub2plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #2".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta.unwrap(), pub2plus.clone());
         // confirm MyNFT3 token permission added david with ALL permission's expiration
         let info_store = ReadonlyPrefixedStorage::new(PREFIX_INFOS, &deps.storage);
         let token: Token = json_load(&info_store, &tok3_key).unwrap();
@@ -3959,6 +4212,12 @@ mod tests {
             private_metadata: priv_expect.clone(),
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -4138,7 +4397,14 @@ mod tests {
         assert_eq!(priv_meta, priv_expect.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Option<Metadata> = may_load(&pub_store, &tok_key).unwrap();
-        assert!(pub_meta.is_none());
+        let pub2plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta.unwrap(), pub2plus.clone());
         // confirm AuthList is still empty
         let auth_store = ReadonlyPrefixedStorage::new(PREFIX_AUTHLIST, &deps.storage);
         let auth_list: Option<Vec<AuthList>> = may_load(&auth_store, alice_key).unwrap();
@@ -4231,7 +4497,14 @@ mod tests {
         assert_eq!(priv_meta, priv_expect.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Option<Metadata> = may_load(&pub_store, &tok_key).unwrap();
-        assert!(pub_meta.is_none());
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta.unwrap(), pub1plus.clone());
         assert!(token.permissions.is_empty());
         // confirm AuthList removed charlie
         let auth_store = ReadonlyPrefixedStorage::new(PREFIX_AUTHLIST, &deps.storage);
@@ -4260,7 +4533,7 @@ mod tests {
         assert_eq!(priv_meta, priv_expect.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Option<Metadata> = may_load(&pub_store, &tok_key).unwrap();
-        assert!(pub_meta.is_none());
+        assert_eq!(pub_meta.unwrap(), pub1plus.clone());
         assert!(token.permissions.is_empty());
         // confirm AuthList doesn not contain charlie
         let auth_store = ReadonlyPrefixedStorage::new(PREFIX_AUTHLIST, &deps.storage);
@@ -4307,7 +4580,7 @@ mod tests {
         assert_eq!(priv_meta, priv_expect.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Option<Metadata> = may_load(&pub_store, &tok_key).unwrap();
-        assert!(pub_meta.is_none());
+        assert_eq!(pub_meta.unwrap(), pub1plus.clone());
         assert!(token.permissions.is_empty());
         // confirm AuthList does not contain bob
         let auth_store = ReadonlyPrefixedStorage::new(PREFIX_AUTHLIST, &deps.storage);
@@ -4337,6 +4610,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -4355,6 +4634,12 @@ mod tests {
             }),
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -4436,7 +4721,14 @@ mod tests {
         assert_eq!(priv_meta, priv2.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Option<Metadata> = may_load(&pub_store, &tok2_key).unwrap();
-        assert!(pub_meta.is_none());
+        let pub2plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #2".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta.unwrap(), pub2plus.clone());
         // confirm MyNFT3 token permission added david with ALL permission's expiration
         let info_store = ReadonlyPrefixedStorage::new(PREFIX_INFOS, &deps.storage);
         let token: Token = json_load(&info_store, &tok3_key).unwrap();
@@ -4491,6 +4783,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -4585,6 +4883,12 @@ mod tests {
                 }),
             }),
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: Some("Mint it baby!".to_string()),
             padding: None,
@@ -4790,6 +5094,12 @@ mod tests {
             public_metadata: pub2.clone(),
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -4819,6 +5129,12 @@ mod tests {
             public_metadata: pub3.clone(),
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -4884,7 +5200,16 @@ mod tests {
         assert_eq!(priv_meta, priv3.unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &tok3_key).unwrap();
-        assert_eq!(pub_meta, pub3.unwrap());
+        let pub3plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #3".to_string()),
+                description: Some("pubmetadata3".to_string()),
+                image: Some("puburi3".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub3plus.clone());
         // confirm the MyNFT2 metadata has been deleted from storage
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &tok2_key).unwrap();
@@ -4983,6 +5308,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5035,6 +5366,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -5047,6 +5384,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -5076,6 +5419,12 @@ mod tests {
             public_metadata: pub3.clone(),
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -5087,6 +5436,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -5097,6 +5452,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5109,6 +5470,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -5119,6 +5486,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5131,6 +5504,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -5281,6 +5660,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -5293,6 +5678,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -5303,6 +5694,12 @@ mod tests {
             private_metadata: priv3.clone(),
             public_metadata: pub3.clone(),
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5314,6 +5711,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5324,6 +5727,12 @@ mod tests {
             owner: Some(HumanAddr("bob".to_string())),
             private_metadata: None,
             public_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -5336,6 +5745,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5347,6 +5762,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5358,6 +5779,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5503,6 +5930,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5515,6 +5948,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5526,6 +5965,12 @@ mod tests {
             private_metadata: priv3.clone(),
             public_metadata: pub3.clone(),
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5538,6 +5983,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -5548,6 +5999,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5559,6 +6016,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5569,6 +6032,12 @@ mod tests {
             owner: Some(HumanAddr("charlie".to_string())),
             private_metadata: None,
             public_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -5581,6 +6050,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -5897,6 +6372,12 @@ mod tests {
             }),
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: Some("Mint it baby!".to_string()),
             padding: None,
@@ -5988,6 +6469,12 @@ mod tests {
             public_metadata: pub1.clone(),
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: Some("Mint it baby!".to_string()),
             padding: None,
         };
@@ -6252,7 +6739,16 @@ mod tests {
         assert_eq!(priv_meta, priv1.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &tok_key).unwrap();
-        assert_eq!(pub_meta, pub1.clone().unwrap());
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                description: Some("pubmetadata".to_string()),
+                image: Some("puburi".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub1plus.clone());
         // confirm the tx was logged to all involved parties
         let (txs, total) = get_txs(&deps.api, &deps.storage, &alice_raw, 0, 1).unwrap();
         assert_eq!(total, 2);
@@ -6341,7 +6837,7 @@ mod tests {
         assert_eq!(priv_meta, priv1.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &tok_key).unwrap();
-        assert_eq!(pub_meta, pub1.clone().unwrap());
+        assert_eq!(pub_meta, pub1plus.clone());
         // confirm the tx was logged to all involved parties
         let (txs, total) = get_txs(&deps.api, &deps.storage, &charlie_raw, 0, 10).unwrap();
         assert_eq!(total, 1);
@@ -6452,6 +6948,12 @@ mod tests {
             }),
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: Some("Mint it baby!".to_string()),
             padding: None,
@@ -6547,6 +7049,12 @@ mod tests {
                     private_metadata: None,
                     public_metadata: None,
                     royalty_info: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     serial_number: None,
                     memo: None,
                 },
@@ -6556,6 +7064,12 @@ mod tests {
                     private_metadata: None,
                     public_metadata: None,
                     royalty_info: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     serial_number: None,
                     memo: None,
                 },
@@ -6564,6 +7078,12 @@ mod tests {
                     owner: Some(HumanAddr("alice".to_string())),
                     private_metadata: None,
                     public_metadata: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     royalty_info: None,
                     serial_number: None,
                     memo: None,
@@ -6573,6 +7093,12 @@ mod tests {
                     owner: Some(HumanAddr("bob".to_string())),
                     private_metadata: None,
                     public_metadata: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     royalty_info: None,
                     serial_number: None,
                     memo: None,
@@ -6582,6 +7108,12 @@ mod tests {
                     owner: Some(HumanAddr("bob".to_string())),
                     private_metadata: None,
                     public_metadata: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     royalty_info: None,
                     serial_number: None,
                     memo: None,
@@ -6591,6 +7123,12 @@ mod tests {
                     owner: Some(HumanAddr("charlie".to_string())),
                     private_metadata: None,
                     public_metadata: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     royalty_info: None,
                     serial_number: None,
                     memo: None,
@@ -6760,6 +7298,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -6772,6 +7316,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -6782,6 +7332,12 @@ mod tests {
             owner: Some(HumanAddr("alice".to_string())),
             private_metadata: None,
             public_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -6794,6 +7350,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -6805,6 +7367,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -6816,6 +7384,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -7135,6 +7709,12 @@ mod tests {
                     owner: Some(HumanAddr("alice".to_string())),
                     private_metadata: None,
                     public_metadata: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     royalty_info: None,
                     serial_number: None,
                     memo: None,
@@ -7145,6 +7725,12 @@ mod tests {
                     private_metadata: None,
                     public_metadata: None,
                     royalty_info: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     serial_number: None,
                     memo: None,
                 },
@@ -7154,6 +7740,12 @@ mod tests {
                     private_metadata: None,
                     public_metadata: None,
                     royalty_info: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     serial_number: None,
                     memo: None,
                 },
@@ -7163,6 +7755,12 @@ mod tests {
                     private_metadata: None,
                     public_metadata: None,
                     royalty_info: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     serial_number: None,
                     memo: None,
                 },
@@ -7172,6 +7770,12 @@ mod tests {
                     private_metadata: None,
                     public_metadata: None,
                     royalty_info: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     serial_number: None,
                     memo: None,
                 },
@@ -7180,6 +7784,12 @@ mod tests {
                     owner: Some(HumanAddr("charlie".to_string())),
                     private_metadata: None,
                     public_metadata: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     royalty_info: None,
                     serial_number: None,
                     memo: None,
@@ -7341,6 +7951,12 @@ mod tests {
             }),
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: Some("Mint it baby!".to_string()),
             padding: None,
@@ -7437,6 +8053,12 @@ mod tests {
             private_metadata: priv1.clone(),
             public_metadata: pub1.clone(),
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: Some("Mint it baby!".to_string()),
             padding: None,
@@ -7563,18 +8185,7 @@ mod tests {
             .canonical_address(&HumanAddr("david".to_string()))
             .unwrap();
         let david_key = david_raw.as_slice();
-        let transfer_idx = PermissionType::Transfer.to_usize();
-        let view_owner_idx = PermissionType::ViewOwner.to_usize();
-        let view_meta_idx = PermissionType::ViewMetadata.to_usize();
-
-        // confirm that sending to the same address that owns the token does not
-        // erase the current permissions
-        let handle_msg = HandleMsg::RegisterReceiveNft {
-            code_hash: "alice code hash".to_string(),
-            also_implements_batch_receive_nft: None,
-            padding: None,
-        };
-        let _handle_result = handle(&mut deps, mock_env("alice", &[]), handle_msg);
+        // confirm that sending to the same address that owns the token throws an error
         let handle_msg = HandleMsg::SendNft {
             contract: HumanAddr("alice".to_string()),
             receiver_info: None,
@@ -7603,90 +8214,10 @@ mod tests {
             },
             handle_msg,
         );
-        // confirm that the ReceiveNft msg was created
-        let handle_resp = handle_result.unwrap();
-        let messages = handle_resp.messages;
-        let mut msg_fr_al = to_binary(&Snip721ReceiveMsg::ReceiveNft {
-            sender: HumanAddr("alice".to_string()),
-            token_id: "MyNFT".to_string(),
-            msg: None,
-        })
-        .unwrap();
-        let msg_fr_al = space_pad(&mut msg_fr_al.0, 256usize);
-        let msg_fr_al = CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: HumanAddr("alice".to_string()),
-            callback_code_hash: "alice code hash".to_string(),
-            msg: Binary(msg_fr_al.to_vec()),
-            send: vec![],
-        });
-        assert_eq!(messages[0], msg_fr_al);
-
-        // confirm token was not removed from the maps
-        let map2idx = ReadonlyPrefixedStorage::new(PREFIX_MAP_TO_INDEX, &deps.storage);
-        let index: u32 = load(&map2idx, "MyNFT".as_bytes()).unwrap();
-        let token_key = index.to_le_bytes();
-        let map2id = ReadonlyPrefixedStorage::new(PREFIX_MAP_TO_ID, &deps.storage);
-        let id: String = load(&map2id, &token_key).unwrap();
-        assert_eq!("MyNFT".to_string(), id);
-        // confirm token info is the same
-        let info_store = ReadonlyPrefixedStorage::new(PREFIX_INFOS, &deps.storage);
-        let token: Token = json_load(&info_store, &tok_key).unwrap();
-        assert_eq!(token.owner, alice_raw);
-        assert_eq!(token.permissions.len(), 2);
-        let charlie_tok_perm = token
-            .permissions
-            .iter()
-            .find(|p| p.address == charlie_raw)
-            .unwrap();
-        assert_eq!(charlie_tok_perm.expirations[view_meta_idx], None);
-        assert_eq!(
-            charlie_tok_perm.expirations[transfer_idx],
-            Some(Expiration::AtHeight(10))
-        );
-        assert_eq!(charlie_tok_perm.expirations[view_owner_idx], None);
-        let bob_tok_perm = token
-            .permissions
-            .iter()
-            .find(|p| p.address == bob_raw)
-            .unwrap();
-        assert_eq!(bob_tok_perm.expirations[view_meta_idx], None);
-        assert_eq!(bob_tok_perm.expirations[transfer_idx], None);
-        assert_eq!(
-            bob_tok_perm.expirations[view_owner_idx],
-            Some(Expiration::Never)
-        );
-        assert!(token.unwrapped);
-        // confirm no transfer tx was logged (latest should be the mint tx)
-        let (txs, total) = get_txs(&deps.api, &deps.storage, &alice_raw, 0, 1).unwrap();
-        assert_eq!(total, 1);
-        assert_eq!(
-            txs[0].action,
-            TxAction::Mint {
-                minter: HumanAddr("admin".to_string()),
-                recipient: HumanAddr("alice".to_string()),
-            }
-        );
-        // confirm the owner list is correct
-        let inventory = Inventory::new(&deps.storage, alice_raw.clone()).unwrap();
-        assert_eq!(inventory.info.count, 1);
-        assert!(inventory.contains(&deps.storage, 0).unwrap());
-        // confirm charlie's and bob's AuthList were not changed
-        let auth_store = ReadonlyPrefixedStorage::new(PREFIX_AUTHLIST, &deps.storage);
-        let alice_list: Vec<AuthList> = load(&auth_store, alice_key).unwrap();
-        assert_eq!(alice_list.len(), 2);
-        let charlie_auth = alice_list
-            .iter()
-            .find(|a| a.address == charlie_raw)
-            .unwrap();
-        assert_eq!(charlie_auth.tokens[transfer_idx].len(), 1);
-        assert!(charlie_auth.tokens[transfer_idx].contains(&0u32));
-        assert!(charlie_auth.tokens[view_meta_idx].is_empty());
-        assert!(charlie_auth.tokens[view_owner_idx].is_empty());
-        let bob_auth = alice_list.iter().find(|a| a.address == bob_raw).unwrap();
-        assert_eq!(bob_auth.tokens[view_owner_idx].len(), 1);
-        assert!(bob_auth.tokens[view_owner_idx].contains(&0u32));
-        assert!(bob_auth.tokens[view_meta_idx].is_empty());
-        assert!(bob_auth.tokens[transfer_idx].is_empty());
+        let error = extract_error_msg(handle_result);
+        assert!(error.contains(
+            "Attempting to transfer token ID: MyNFT to the address that already owns it"
+        ));
 
         // sanity check: operator sends
         // msg to go with ReceiveNft
@@ -7768,7 +8299,16 @@ mod tests {
         assert_eq!(priv_meta, priv1.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &tok_key).unwrap();
-        assert_eq!(pub_meta, pub1.clone().unwrap());
+        let pub2plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                description: Some("pubmetadata".to_string()),
+                image: Some("puburi".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub2plus.clone());
         // confirm the tx was logged to all involved parties
         let (txs, total) = get_txs(&deps.api, &deps.storage, &alice_raw, 0, 1).unwrap();
         assert_eq!(total, 2);
@@ -7881,7 +8421,16 @@ mod tests {
         assert_eq!(priv_meta, priv1.clone().unwrap());
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &tok_key).unwrap();
-        assert_eq!(pub_meta, pub1.clone().unwrap());
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                description: Some("pubmetadata".to_string()),
+                image: Some("puburi".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub1plus.clone());
         // confirm the tx was logged to all involved parties
         let (txs, total) = get_txs(&deps.api, &deps.storage, &charlie_raw, 0, 10).unwrap();
         assert_eq!(total, 1);
@@ -8014,6 +8563,12 @@ mod tests {
             }),
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: Some("Mint it baby!".to_string()),
             padding: None,
@@ -8111,6 +8666,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -8122,6 +8683,12 @@ mod tests {
             owner: Some(HumanAddr("alice".to_string())),
             private_metadata: None,
             public_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -8134,6 +8701,12 @@ mod tests {
             private_metadata: None,
             public_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -8146,6 +8719,12 @@ mod tests {
             public_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -8155,6 +8734,12 @@ mod tests {
             owner: Some(HumanAddr("bob".to_string())),
             private_metadata: None,
             public_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -8166,6 +8751,12 @@ mod tests {
             owner: Some(HumanAddr("charlie".to_string())),
             private_metadata: None,
             public_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -8584,6 +9175,12 @@ mod tests {
                     private_metadata: None,
                     public_metadata: None,
                     royalty_info: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     serial_number: None,
                     memo: None,
                 },
@@ -8593,6 +9190,12 @@ mod tests {
                     private_metadata: None,
                     public_metadata: None,
                     royalty_info: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     serial_number: None,
                     memo: None,
                 },
@@ -8601,6 +9204,12 @@ mod tests {
                     owner: Some(HumanAddr("alice".to_string())),
                     private_metadata: None,
                     public_metadata: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     royalty_info: None,
                     serial_number: None,
                     memo: None,
@@ -8611,6 +9220,12 @@ mod tests {
                     private_metadata: None,
                     public_metadata: None,
                     royalty_info: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     serial_number: None,
                     memo: None,
                 },
@@ -8620,6 +9235,12 @@ mod tests {
                     private_metadata: None,
                     public_metadata: None,
                     royalty_info: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     serial_number: None,
                     memo: None,
                 },
@@ -8628,6 +9249,12 @@ mod tests {
                     owner: Some(HumanAddr("charlie".to_string())),
                     private_metadata: None,
                     public_metadata: None,
+                    image_info: ImageInfo {
+                        current: vec![],
+                        previous: vec![],
+                        natural: vec![],
+                        svg_server: None,
+                    },
                     royalty_info: None,
                     serial_number: None,
                     memo: None,
@@ -9727,6 +10354,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -9737,6 +10370,12 @@ mod tests {
             owner: Some(HumanAddr("alice".to_string())),
             public_metadata: None,
             private_metadata: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             royalty_info: None,
             serial_number: None,
             memo: None,
@@ -9749,6 +10388,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -9943,6 +10588,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -9953,6 +10604,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -9964,6 +10621,12 @@ mod tests {
             public_metadata: None,
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -10289,6 +10952,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -10394,7 +11063,16 @@ mod tests {
         assert!(token.unwrapped);
         let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
         let pub_meta: Metadata = load(&pub_store, &nft1_key).unwrap();
-        assert_eq!(pub_meta, pub1.clone().unwrap());
+        let pub1plus = Metadata {
+            token_uri: None,
+            extension: Some(Extension {
+                name: Some("Mystic Skulls #1".to_string()),
+                description: Some("Pub 1".to_string()),
+                image: Some("URI 1".to_string()),
+                ..Extension::default()
+            }),
+        };
+        assert_eq!(pub_meta, pub1plus.clone());
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
         let priv_meta: Option<Metadata> = may_load(&priv_store, &nft1_key).unwrap();
         assert!(priv_meta.is_none());
@@ -10644,6 +11322,12 @@ mod tests {
             public_metadata: pub1.clone(),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -10664,6 +11348,12 @@ mod tests {
             public_metadata: pub2.clone(),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -10701,6 +11391,12 @@ mod tests {
             public_metadata: pub1.clone(),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -10712,6 +11408,12 @@ mod tests {
             public_metadata: pub2.clone(),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -11021,6 +11723,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -11032,6 +11740,12 @@ mod tests {
             private_metadata: None,
             royalty_info: None,
             serial_number: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             memo: None,
             padding: None,
         };
@@ -11205,6 +11919,12 @@ mod tests {
             public_metadata: pub1.clone(),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,
@@ -11216,6 +11936,12 @@ mod tests {
             public_metadata: pub2.clone(),
             private_metadata: None,
             royalty_info: None,
+            image_info: ImageInfo {
+                current: vec![],
+                previous: vec![],
+                natural: vec![],
+                svg_server: None,
+            },
             serial_number: None,
             memo: None,
             padding: None,

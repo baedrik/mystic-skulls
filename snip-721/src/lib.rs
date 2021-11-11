@@ -10,6 +10,7 @@ mod rand;
 pub mod receiver;
 mod registry;
 pub mod royalties;
+mod server_msgs;
 pub mod state;
 pub mod token;
 mod unittest_handles;

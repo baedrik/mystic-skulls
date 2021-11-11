@@ -12,11 +12,12 @@ use std::collections::HashSet;
 use secret_toolkit::{
     permit::{validate, Permit, RevokedPermits},
     snip20::set_viewing_key_msg,
-    utils::{pad_handle_result, pad_query_result},
+    utils::{pad_handle_result, pad_query_result, Query},
 };
 
 use crate::contract_info::{ContractInfo, StoreContractInfo};
 use crate::expiration::Expiration;
+use crate::image::{ImageInfo, StoredImageInfo};
 use crate::inventory::{Inventory, InventoryIter};
 use crate::mint_run::{SerialNumber, StoredMintRunInfo};
 use crate::msg::{
@@ -28,18 +29,18 @@ use crate::rand::sha_256;
 use crate::receiver::{batch_receive_nft_msg, receive_nft_msg};
 use crate::registry::Registry;
 use crate::royalties::{RoyaltyInfo, StoredRoyaltyInfo};
+use crate::server_msgs::{ServerQueryMsg, TokenMetadata, TokenMetadataResponse};
 use crate::state::{
     get_txs, json_may_load, json_save, load, may_load, remove, save, store_burn, store_mint,
     store_transfer, AuthList, Config, Permission, PermissionType, ReceiveRegistration, ServerInfo,
     ADMINS_KEY, BLOCK_KEY, CONFIG_KEY, CREATOR_KEY, DEFAULT_ROYALTY_KEY, MINTERS_KEY,
-    MY_ADDRESS_KEY, PREFIX_ALL_PERMISSIONS, PREFIX_AUTHLIST, PREFIX_INFOS, PREFIX_MAP_TO_ID,
-    PREFIX_MAP_TO_INDEX, PREFIX_MINT_RUN, PREFIX_OWNER_PRIV, PREFIX_PRIV_META,
+    MY_ADDRESS_KEY, PREFIX_ALL_PERMISSIONS, PREFIX_AUTHLIST, PREFIX_IMAGE_INFO, PREFIX_INFOS,
+    PREFIX_MAP_TO_ID, PREFIX_MAP_TO_INDEX, PREFIX_MINT_RUN, PREFIX_OWNER_PRIV, PREFIX_PRIV_META,
     PREFIX_PUB_META, PREFIX_RECEIVERS, PREFIX_REVOKED_PERMITS, PREFIX_ROYALTY_INFO,
-    PREFIX_SERVER_REGISTRY, PREFIX_VIEW_KEY, PRNG_SEED_KEY, SVG_INFO_KEY, PREFIX_IMAGE_INFO,
+    PREFIX_SERVER_REGISTRY, PREFIX_VIEW_KEY, PRNG_SEED_KEY, SVG_INFO_KEY,
 };
 use crate::token::{Metadata, Token};
 use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
-use crate::image::{ImageInfo};
 
 /// pad handle responses and log attributes to blocks of 256 bytes to prevent leaking info based on
 /// response size
@@ -179,8 +180,8 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             private_metadata,
             serial_number,
             royalty_info,
+            image_info,
             memo,
-            entropy,
             ..
         } => mint(
             deps,
@@ -193,8 +194,8 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             private_metadata,
             serial_number,
             royalty_info,
+            image_info,
             memo,
-            entropy,
         ),
         HandleMsg::BatchMintNft { mut mints, .. } => batch_mint(
             deps,
@@ -481,7 +482,18 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             ContractStatus::StopTransactions.to_u8(),
             &svg_server,
         ),
-        HandleMsg::SetImageInfo { token_id, image_info, .. } => try_set_image_info(deps, &env.message.sender, &config, ContractStatus::StopTransactions.to_u8(), &token_id, &image_info),
+        HandleMsg::SetImageInfo {
+            token_id,
+            image_info,
+            ..
+        } => try_set_image_info(
+            deps,
+            &env.message.sender,
+            &config,
+            ContractStatus::StopTransactions.to_u8(),
+            &token_id,
+            image_info,
+        ),
     };
     pad_handle_result(response, BLOCK_SIZE)
 }
@@ -502,8 +514,8 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
 /// * `private_metadata` - optional private metadata viewable only by owner and whitelist
 /// * `serial_number` - optional serial number information for this token
 /// * `royalty_info` - optional royalties information for this token
+/// * `image_info` - token's image info
 /// * `memo` - optional memo for the mint tx
-/// * `entropy` - entropy String used in randomization
 #[allow(clippy::too_many_arguments)]
 pub fn mint<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -516,8 +528,8 @@ pub fn mint<S: Storage, A: Api, Q: Querier>(
     private_metadata: Option<Metadata>,
     serial_number: Option<SerialNumber>,
     royalty_info: Option<RoyaltyInfo>,
+    image_info: ImageInfo,
     memo: Option<String>,
-    entropy: String,
 ) -> HandleResult {
     check_status(config.status, priority)?;
     let sender_raw = deps.api.canonical_address(&env.message.sender)?;
@@ -535,8 +547,8 @@ pub fn mint<S: Storage, A: Api, Q: Querier>(
         private_metadata,
         serial_number,
         royalty_info,
+        image_info,
         memo,
-        entropy,
     }];
     let mut minted = mint_list(deps, &env, config, &sender_raw, &mut mints)?;
     let minted_str = minted.pop().unwrap_or_else(String::new);
@@ -597,14 +609,14 @@ pub fn batch_mint<S: Storage, A: Api, Q: Querier>(
 /// * `config` - a reference to the Config
 /// * `priority` - u8 representation of highest status level this action is permitted at
 /// * `token_id` - ID of token whose ImageInfo should be updated
-/// * `image_info` - a reference to the new ImageInfo 
+/// * `image_info` - the new ImageInfo
 pub fn try_set_image_info<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     sender: &HumanAddr,
     config: &Config,
     priority: u8,
     token_id: &str,
-    image_info: &ImageInfo,
+    image_info: ImageInfo,
 ) -> HandleResult {
     check_status(config.status, priority)?;
     let sender_raw = deps.api.canonical_address(sender)?;
@@ -616,10 +628,11 @@ pub fn try_set_image_info<S: Storage, A: Api, Q: Querier>(
         ));
     }
     let map2idx = ReadonlyPrefixedStorage::new(PREFIX_MAP_TO_INDEX, &deps.storage);
-    let idx: u32 =
-        may_load(&map2idx, token_id.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Token ID: {} not found", token_id)))?;
+    let idx: u32 = may_load(&map2idx, token_id.as_bytes())?
+        .ok_or_else(|| StdError::generic_err(format!("Token ID: {} not found", token_id)))?;
+    let raw = image_info.into_stored(deps)?;
     let mut image_store = PrefixedStorage::new(PREFIX_IMAGE_INFO, &mut deps.storage);
-    save(&mut image_store, &idx.to_le_bytes(), image_info)?;
+    save(&mut image_store, &idx.to_le_bytes(), &raw)?;
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
@@ -1693,7 +1706,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
             viewer,
             include_expired,
         } => query_owner_of(deps, &token_id, viewer, include_expired, None),
-        QueryMsg::NftInfo { token_id } => query_nft_info(&deps.storage, &token_id),
+        QueryMsg::NftInfo { token_id } => query_nft_info(deps, &token_id),
         QueryMsg::PrivateMetadata { token_id, viewer } => {
             query_private_meta(deps, &token_id, viewer, None)
         }
@@ -1761,9 +1774,15 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
         }
         QueryMsg::RegisteredCodeHash { contract } => query_code_hash(deps, &contract),
         QueryMsg::WithPermit { permit, query } => permit_queries(deps, permit, query),
-        QueryMsg::SvgServerContracts { viewer, page, page_size } => query_svg_servers(deps, Some(viewer), None, page, page_size),
+        QueryMsg::SvgServerContracts {
+            viewer,
+            page,
+            page_size,
+        } => query_svg_servers(deps, Some(viewer), None, page, page_size),
         QueryMsg::DefaultSvgServer { viewer } => query_default_server(deps, Some(viewer), None),
-        QueryMsg::ImageInfo { token_id, viewer } => query_image_info(deps, Some(viewer), None, &token_id),
+        QueryMsg::ImageInfo { token_id, viewer } => {
+            query_image_info(deps, Some(viewer), None, &token_id)
+        }
     };
     pad_query_result(response, BLOCK_SIZE)
 }
@@ -1842,9 +1861,13 @@ pub fn permit_queries<S: Storage, A: Api, Q: Querier>(
             start_after,
             limit,
         } => query_tokens(deps, &owner, None, None, start_after, limit, Some(querier)),
-        QueryWithPermit::SvgServerContracts { page, page_size } => query_svg_servers(deps, None, Some(querier), page, page_size),
+        QueryWithPermit::SvgServerContracts { page, page_size } => {
+            query_svg_servers(deps, None, Some(querier), page, page_size)
+        }
         QueryWithPermit::DefaultSvgServer {} => query_default_server(deps, None, Some(querier)),
-        QueryWithPermit::ImageInfo { token_id } => query_image_info(deps, None, Some(querier), &token_id),
+        QueryWithPermit::ImageInfo { token_id } => {
+            query_image_info(deps, None, Some(querier), &token_id)
+        }
     }
 }
 
@@ -1874,14 +1897,13 @@ fn query_image_info<S: Storage, A: Api, Q: Querier>(
         ));
     }
     let map2idx = ReadonlyPrefixedStorage::new(PREFIX_MAP_TO_INDEX, &deps.storage);
-    let idx: u32 =
-        may_load(&map2idx, token_id.as_bytes())?.ok_or_else(|| StdError::generic_err(format!("Token ID: {} not found", token_id)))?;
+    let idx: u32 = may_load(&map2idx, token_id.as_bytes())?
+        .ok_or_else(|| StdError::generic_err(format!("Token ID: {} not found", token_id)))?;
     let image_store = ReadonlyPrefixedStorage::new(PREFIX_IMAGE_INFO, &deps.storage);
-    let image_info: ImageInfo = may_load(&image_store, &idx.to_le_bytes())?.ok_or_else(|| StdError::generic_err("ImageInfo storage is corrupt"))?;
-
-    to_binary(&QueryAnswer::ImageInfo {
-        image_info,
-    })
+    let raw: StoredImageInfo = may_load(&image_store, &idx.to_le_bytes())?
+        .ok_or_else(|| StdError::generic_err("StoredImageInfo storage is corrupt"))?;
+    let image_info = raw.into_human(deps)?;
+    to_binary(&QueryAnswer::ImageInfo { image_info })
 }
 
 /// Returns QueryResult displaying the default svg server contract
@@ -1952,10 +1974,7 @@ fn query_svg_servers<S: Storage, A: Api, Q: Querier>(
         .into_iter()
         .map(|c| c.into_humanized(&deps.api))
         .collect::<StdResult<Vec<ContractInfo>>>()?;
-    to_binary(&QueryAnswer::SvgServerContracts {
-        count,
-        svg_servers,
-    })
+    to_binary(&QueryAnswer::SvgServerContracts { count, svg_servers })
 }
 
 /// Returns QueryResult displaying the contract's creator
@@ -2196,15 +2215,21 @@ pub fn query_owner_of<S: Storage, A: Api, Q: Querier>(
 ///
 /// # Arguments
 ///
-/// * `storage` - a reference to the contract's storage
+/// * `deps` - a reference to Extern containing all the contract's external dependencies
 /// * `token_id` - string slice of the token id
-pub fn query_nft_info<S: ReadonlyStorage>(storage: &S, token_id: &str) -> QueryResult {
-    let map2idx = ReadonlyPrefixedStorage::new(PREFIX_MAP_TO_INDEX, storage);
+pub fn query_nft_info<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    token_id: &str,
+) -> QueryResult {
+    let map2idx = ReadonlyPrefixedStorage::new(PREFIX_MAP_TO_INDEX, &deps.storage);
     let may_idx: Option<u32> = may_load(&map2idx, token_id.as_bytes())?;
     // if token id was found
     if let Some(idx) = may_idx {
-        let meta_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, storage);
-        let meta: Metadata = may_load(&meta_store, &idx.to_le_bytes())?.unwrap_or(Metadata {
+        let meta_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
+        let token_key = idx.to_le_bytes();
+        let local: Option<Metadata> = may_load(&meta_store, &token_key)?;
+        let svr_meta = get_meta(deps, &token_key)?;
+        let meta = combine_meta(local, svr_meta.public_metadata).unwrap_or(Metadata {
             token_uri: None,
             extension: None,
         });
@@ -2213,7 +2238,7 @@ pub fn query_nft_info<S: ReadonlyStorage>(storage: &S, token_id: &str) -> QueryR
             extension: meta.extension,
         });
     }
-    let config: Config = load(storage, CONFIG_KEY)?;
+    let config: Config = load(&deps.storage, CONFIG_KEY)?;
     // token id wasn't found
     // if the token supply is public, let them know the token does not exist
     if config.token_supply_is_public {
@@ -2262,8 +2287,11 @@ pub fn query_private_meta<S: Storage, A: Api, Q: Querier>(
             "Sealed metadata must be unwrapped by calling Reveal before it can be viewed",
         ));
     }
+    let token_key = prep_info.idx.to_le_bytes();
     let meta_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
-    let meta: Metadata = may_load(&meta_store, &prep_info.idx.to_le_bytes())?.unwrap_or(Metadata {
+    let local: Option<Metadata> = may_load(&meta_store, &token_key)?;
+    let svr_meta = get_meta(deps, &token_key)?;
+    let meta = combine_meta(local, svr_meta.private_metadata).unwrap_or(Metadata {
         token_uri: None,
         extension: None,
     });
@@ -2292,7 +2320,10 @@ pub fn query_all_nft_info<S: Storage, A: Api, Q: Querier>(
     let (owner, approvals, idx) =
         process_cw721_owner_of(deps, token_id, viewer, include_expired, from_permit)?;
     let meta_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
-    let info: Option<Metadata> = may_load(&meta_store, &idx.to_le_bytes())?;
+    let token_key = idx.to_le_bytes();
+    let local: Option<Metadata> = may_load(&meta_store, &token_key)?;
+    let svr_meta = get_meta(deps, &token_key)?;
+    let info = combine_meta(local, svr_meta.public_metadata);
     let access = Cw721OwnerOfResponse { owner, approvals };
     to_binary(&QueryAnswer::AllNftInfo { access, info })
 }
@@ -2350,7 +2381,9 @@ pub fn query_nft_dossier<S: Storage, A: Api, Q: Querier>(
     // get the public metadata
     let token_key = prep_info.idx.to_le_bytes();
     let pub_store = ReadonlyPrefixedStorage::new(PREFIX_PUB_META, &deps.storage);
-    let public_metadata: Option<Metadata> = may_load(&pub_store, &token_key)?;
+    let local_pub: Option<Metadata> = may_load(&pub_store, &token_key)?;
+    let svr_meta = get_meta(deps, &token_key)?;
+    let public_metadata = combine_meta(local_pub, svr_meta.public_metadata);
     // get the private metadata if it is not sealed and if the viewer is permitted
     let mut display_private_metadata_error = None;
     let private_metadata = if let Err(err) = check_perm_core(
@@ -2376,8 +2409,8 @@ pub fn query_nft_dossier<S: Storage, A: Api, Q: Querier>(
         None
     } else {
         let priv_store = ReadonlyPrefixedStorage::new(PREFIX_PRIV_META, &deps.storage);
-        let priv_meta: Option<Metadata> = may_load(&priv_store, &token_key)?;
-        priv_meta
+        let local_priv: Option<Metadata> = may_load(&priv_store, &token_key)?;
+        combine_meta(local_priv, svr_meta.private_metadata)
     };
     // get the royalty information if present
     let roy_store = ReadonlyPrefixedStorage::new(PREFIX_ROYALTY_INFO, &deps.storage);
@@ -4250,9 +4283,12 @@ fn transfer_impl<S: Storage, A: Api, Q: Querier>(
         config,
     )?;
     let old_owner = token.owner;
-    // don't bother processing anything if ownership does not change
+    // throw error if ownership would not change
     if old_owner == recipient {
-        return Ok(old_owner);
+        return Err(StdError::generic_err(format!(
+            "Attempting to transfer token ID: {} to the address that already owns it",
+            &token_id
+        )));
     }
     token.owner = recipient.clone();
     token.permissions.clear();
@@ -4573,11 +4609,17 @@ fn mint_list<S: Storage, A: Api, Q: Querier>(
         // a new prefix and store with the `token_key` like below
         //
         // save the metadata
-        if let Some(pub_meta) = mint.public_metadata {
-            enforce_metadata_field_exclusion(&pub_meta)?;
-            let mut pub_store = PrefixedStorage::new(PREFIX_PUB_META, &mut deps.storage);
-            save(&mut pub_store, &token_key, &pub_meta)?;
-        }
+        let mut pub_meta = mint.public_metadata.unwrap_or(Metadata {
+            token_uri: None,
+            extension: None,
+        });
+        let mut xten = pub_meta.extension.unwrap_or_default();
+        xten.name = Some(format!("Mystic Skulls #{}", config.mint_cnt + 1));
+        pub_meta.extension = Some(xten);
+        // make sure there is only the extension now that we added the name to it
+        pub_meta.token_uri = None;
+        let mut pub_store = PrefixedStorage::new(PREFIX_PUB_META, &mut deps.storage);
+        save(&mut pub_store, &token_key, &pub_meta)?;
         if let Some(priv_meta) = mint.private_metadata {
             enforce_metadata_field_exclusion(&priv_meta)?;
             let mut priv_store = PrefixedStorage::new(PREFIX_PRIV_META, &mut deps.storage);
@@ -4612,6 +4654,10 @@ fn mint_list<S: Storage, A: Api, Q: Querier>(
             default_roy.as_ref(),
             &token_key,
         )?;
+        // save the image info
+        let raw_image = mint.image_info.into_stored(deps)?;
+        let mut image_store = PrefixedStorage::new(PREFIX_IMAGE_INFO, &mut deps.storage);
+        save(&mut image_store, &token_key, &raw_image)?;
         //
         //
 
@@ -4844,7 +4890,7 @@ fn remove_addrs_from_auth<A: Api>(
     Ok(old_len != addresses.len())
 }
 
-/// Returns HandleResult
+/// Returns StdResult<()>
 ///
 /// adds an svg server to the registry
 ///
@@ -4880,4 +4926,126 @@ fn add_svr<S: Storage, A: Api, Q: Querier>(
         )?);
     }
     Ok(())
+}
+
+/// Returns StdResult<TokenMetadata>
+///
+/// queries the svg server for the public and private metadata corresponding to the image data
+///
+/// # Arguments
+///
+/// * `deps` - a reference to Extern containing all the contract's external dependencies
+/// * `token_key` - key from the token index
+fn get_meta<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    token_key: &[u8],
+) -> StdResult<TokenMetadata> {
+    let svr_inf: ServerInfo = load(&deps.storage, SVG_INFO_KEY)?;
+    let address = deps
+        .api
+        .human_address(&load::<CanonicalAddr, _>(&deps.storage, MY_ADDRESS_KEY)?)?;
+    let image_store = ReadonlyPrefixedStorage::new(PREFIX_IMAGE_INFO, &deps.storage);
+    let image_raw: StoredImageInfo = may_load(&image_store, token_key)?
+        .ok_or_else(|| StdError::generic_err("StoredImageInfo storage is corrupt"))?;
+    let svr_idx = image_raw.svg_server.unwrap_or(svr_inf.default);
+    let server_raw =
+        Registry::<StoreContractInfo>::get_at(&deps.storage, svr_idx, PREFIX_SERVER_REGISTRY)?;
+    let server = server_raw.into_humanized(&deps.api)?;
+    let viewer = ViewerInfo {
+        address,
+        viewing_key: svr_inf.viewing_key,
+    };
+    let svr_msg = ServerQueryMsg::TokenMetadata {
+        viewer,
+        image: image_raw.current,
+    };
+    let svr_resp: TokenMetadataResponse =
+        svr_msg.query(&deps.querier, server.code_hash, server.address)?;
+    Ok(svr_resp.metadata)
+}
+
+/// Returns Option<Metadata>
+///
+/// combines two optional metadata, preferring to keep the local version of a field both
+/// metadata has it, or combining the fields if it is a list
+///
+/// # Arguments
+///
+/// * `local` - optional local and preferred metadata of this token
+/// * `served` - optional metadata delivered from the svg server
+fn combine_meta(local: Option<Metadata>, served: Option<Metadata>) -> Option<Metadata> {
+    // if have a local meta
+    let meta = if let Some(mut prefer) = local {
+        // if there is also a served meta
+        if let Some(default) = served {
+            if prefer.token_uri.is_none() {
+                prefer.token_uri = default.token_uri;
+            }
+            let extension = if let Some(mut pref_ext) = prefer.extension {
+                if let Some(def_ext) = default.extension {
+                    if pref_ext.image.is_none() {
+                        pref_ext.image = def_ext.image;
+                    }
+                    // you better not be putting an image_data in the local meta or you default
+                    // the whole purpose of the svg server
+                    if pref_ext.image_data.is_none() {
+                        pref_ext.image_data = def_ext.image_data;
+                    }
+                    if pref_ext.external_url.is_none() {
+                        pref_ext.external_url = def_ext.external_url;
+                    }
+                    if pref_ext.description.is_none() {
+                        pref_ext.description = def_ext.description;
+                    }
+                    if pref_ext.name.is_none() {
+                        pref_ext.name = def_ext.name;
+                    }
+                    let mut attributes = pref_ext.attributes.unwrap_or_else(Vec::new);
+                    attributes.append(&mut def_ext.attributes.unwrap_or_else(Vec::new));
+                    pref_ext.attributes = if attributes.is_empty() {
+                        None
+                    } else {
+                        Some(attributes)
+                    };
+                    if pref_ext.background_color.is_none() {
+                        pref_ext.background_color = def_ext.background_color;
+                    }
+                    if pref_ext.animation_url.is_none() {
+                        pref_ext.animation_url = def_ext.animation_url;
+                    }
+                    if pref_ext.youtube_url.is_none() {
+                        pref_ext.youtube_url = def_ext.youtube_url;
+                    }
+                    let mut media = pref_ext.media.unwrap_or_else(Vec::new);
+                    media.append(&mut def_ext.media.unwrap_or_else(Vec::new));
+                    pref_ext.media = if media.is_empty() { None } else { Some(media) };
+                    let mut protected_attributes =
+                        pref_ext.protected_attributes.unwrap_or_else(Vec::new);
+                    protected_attributes
+                        .append(&mut def_ext.protected_attributes.unwrap_or_else(Vec::new));
+                    pref_ext.protected_attributes = if protected_attributes.is_empty() {
+                        None
+                    } else {
+                        Some(protected_attributes)
+                    };
+                }
+                Some(pref_ext)
+            // if no preferred extension, just use the served
+            } else {
+                default.extension
+            };
+            prefer.extension = extension;
+        }
+        Some(prefer)
+    // no local meta so just use the served meta
+    } else {
+        served
+    };
+    meta.map(|mut m| {
+        if enforce_metadata_field_exclusion(&m).is_err() {
+            // prefer the extension over a uri
+            m.token_uri = None;
+        }
+        m
+    })
 }

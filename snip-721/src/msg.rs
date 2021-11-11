@@ -7,10 +7,10 @@ use secret_toolkit::permit::Permit;
 
 use crate::contract_info::ContractInfo;
 use crate::expiration::Expiration;
+use crate::image::ImageInfo;
 use crate::mint_run::{MintRunInfo, SerialNumber};
 use crate::royalties::{DisplayRoyaltyInfo, RoyaltyInfo};
 use crate::token::{Extension, Metadata};
-use crate::image::{ImageInfo};
 
 /// Instantiation message
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -120,10 +120,10 @@ pub enum HandleMsg {
         serial_number: Option<SerialNumber>,
         /// optional royalty information for this token
         royalty_info: Option<RoyaltyInfo>,
+        /// the image info
+        image_info: ImageInfo,
         /// optional memo for the tx
         memo: Option<String>,
-        /// entropy for gene randomization
-        entropy: String,
         /// optional message length padding
         padding: Option<String>,
     },
@@ -435,10 +435,10 @@ pub struct Mint {
     pub serial_number: Option<SerialNumber>,
     /// optional royalty info for this token
     pub royalty_info: Option<RoyaltyInfo>,
+    /// the image info
+    pub image_info: ImageInfo,
     /// optional memo for the tx
     pub memo: Option<String>,
-    /// entropy for gene randomization
-    pub entropy: String,
 }
 
 /// token burn info used when doing a BatchBurnNft
@@ -963,7 +963,7 @@ pub enum QueryAnswer {
     /// display a token's ImageInfo
     ImageInfo {
         image_info: ImageInfo,
-    }
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]

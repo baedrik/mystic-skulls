@@ -985,7 +985,6 @@
       "type": "object",
       "required": [
         "current",
-        "gene",
         "natural",
         "previous"
       ],
@@ -998,12 +997,6 @@
             "format": "uint8",
             "minimum": 0.0
           }
-        },
-        "gene": {
-          "description": "the random gene",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
         },
         "natural": {
           "description": "complete initial genetic image svg index array",

@@ -12,12 +12,16 @@
         "mint_nft": {
           "type": "object",
           "required": [
-            "entropy"
+            "image_info"
           ],
           "properties": {
-            "entropy": {
-              "description": "entropy for gene randomization",
-              "type": "string"
+            "image_info": {
+              "description": "the image info",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ImageInfo"
+                }
+              ]
             },
             "memo": {
               "description": "optional memo for the tx",
@@ -1445,7 +1449,6 @@
       "type": "object",
       "required": [
         "current",
-        "gene",
         "natural",
         "previous"
       ],
@@ -1458,12 +1461,6 @@
             "format": "uint8",
             "minimum": 0.0
           }
-        },
-        "gene": {
-          "description": "the random gene",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
         },
         "natural": {
           "description": "complete initial genetic image svg index array",
@@ -1562,12 +1559,16 @@
       "description": "token mint info used when doing a BatchMint",
       "type": "object",
       "required": [
-        "entropy"
+        "image_info"
       ],
       "properties": {
-        "entropy": {
-          "description": "entropy for gene randomization",
-          "type": "string"
+        "image_info": {
+          "description": "the image info",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ImageInfo"
+            }
+          ]
         },
         "memo": {
           "description": "optional memo for the tx",
