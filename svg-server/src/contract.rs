@@ -982,6 +982,16 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
         };
         gene_seed[*skip_cat as usize] = none_idx;
     }
+
+
+
+
+// TODO remove this
+let mut collisions = 0u16;    
+
+
+
+
     for back in backgrounds.into_iter() {
         let background_idx: u8 = if let Some(bg) = back_cache.iter().find(|b| b.id == back) {
             bg.index
@@ -1012,6 +1022,13 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
                 &mut cat_cache,
                 &mut var_cache,
                 &gene_seed,
+
+
+// TODO remove this
+&mut collisions,
+
+
+
             )?;
             if !reroll {
                 genes.push(GeneInfo {
@@ -1024,7 +1041,12 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
         }
     }
 
-    to_binary(&QueryAnswer::NewGenes { genes })
+    to_binary(&QueryAnswer::NewGenes { genes
+    
+// TODO remove this
+,collisions,
+    
+    })
 }
 
 /// Returns QueryResult displaying the layer categories that should be skipped when rolling
@@ -2099,6 +2121,10 @@ fn new_gene_impl<S: ReadonlyStorage>(
     cat_cache: &mut Vec<CatCache>,
     var_cache: &mut Vec<VarCache>,
     gene_seed: &[u8],
+
+// TODO remove this
+    collisions: &mut u16,
+
 ) -> StdResult<(bool, Vec<u8>, Vec<u8>, Vec<u8>)> {
     // define some storages
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, storage);
@@ -2196,6 +2222,11 @@ fn new_gene_impl<S: ReadonlyStorage>(
             {
                 return Ok((false, current_image, genetic_image, unique_check));
             }
+
+// TODO remove this
+*collisions += 1;
+
+
             // if skipping everything, return to try rerolling everything
             if skipping.iter().all(|b| *b) {
                 return Ok((true, Vec::new(), Vec::new(), Vec::new()));
@@ -2275,6 +2306,11 @@ fn new_gene_impl<S: ReadonlyStorage>(
                 {
                     return Ok((false, current_image, genetic_image, unique_check));
                 }
+
+// TODO remove this
+*collisions += 1;
+
+
             }
         }
         idx += 1;

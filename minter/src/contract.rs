@@ -236,6 +236,14 @@ fn try_mint<S: Storage, A: Api, Q: Querier>(
         log: vec![],
         data: Some(to_binary(&HandleAnswer::Mint {
             skulls_minted: qty as u16,
+
+    
+// TODO remove this
+collisions: svr_resp.new_genes.collisions,    
+    
+    
+
+
         })?),
     })
 }

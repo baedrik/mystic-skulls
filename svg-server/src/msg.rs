@@ -357,7 +357,13 @@ pub enum QueryAnswer {
         hiders: Vec<Dependencies>,
     },
     /// response from creating a new genetic images
-    NewGenes { genes: Vec<GeneInfo> },
+    NewGenes { genes: Vec<GeneInfo> 
+    
+// TODO remove this
+,collisions: u16,    
+    
+    
+    },
 }
 
 /// genetic image information

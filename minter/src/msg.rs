@@ -91,6 +91,14 @@ pub enum HandleAnswer {
     /// response of minting skulls
     Mint {
         skulls_minted: u16,
+
+    
+// TODO remove this
+collisions: u16,    
+    
+    
+
+
     },
 }
 
