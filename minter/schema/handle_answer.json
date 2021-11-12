@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HandleAnswer",
+  "description": "Responses from handle functions",
+  "anyOf": [
+    {
+      "description": "response of both AddAdmins and RemoveAdmins",
+      "type": "object",
+      "required": [
+        "admins_list"
+      ],
+      "properties": {
+        "admins_list": {
+          "type": "object",
+          "required": [
+            "admins"
+          ],
+          "properties": {
+            "admins": {
+              "description": "current admins",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response of setting a new multi sig address",
+      "type": "object",
+      "required": [
+        "new_multi_sig"
+      ],
+      "properties": {
+        "new_multi_sig": {
+          "type": "object",
+          "required": [
+            "multi_sig"
+          ],
+          "properties": {
+            "multi_sig": {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from creating a viewing key",
+      "type": "object",
+      "required": [
+        "viewing_key"
+      ],
+      "properties": {
+        "viewing_key": {
+          "type": "object",
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response of changing the minting status",
+      "type": "object",
+      "required": [
+        "set_mint_status"
+      ],
+      "properties": {
+        "set_mint_status": {
+          "type": "object",
+          "required": [
+            "minting_has_halted"
+          ],
+          "properties": {
+            "minting_has_halted": {
+              "description": "true if minting has halted",
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "revoke_permit"
+      ],
+      "properties": {
+        "revoke_permit": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "HumanAddr": {
+      "type": "string"
+    }
+  }
+}

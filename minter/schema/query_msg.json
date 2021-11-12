@@ -1,0 +1,271 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QueryMsg",
+  "description": "Queries",
+  "anyOf": [
+    {
+      "description": "display the minting status",
+      "type": "object",
+      "required": [
+        "mint_status"
+      ],
+      "properties": {
+        "mint_status": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "description": "display the admin addresses",
+      "type": "object",
+      "required": [
+        "admins"
+      ],
+      "properties": {
+        "admins": {
+          "type": "object",
+          "properties": {
+            "permit": {
+              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "display the mint counts",
+      "type": "object",
+      "required": [
+        "mint_counts"
+      ],
+      "properties": {
+        "mint_counts": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "description": "display the nft contract information",
+      "type": "object",
+      "required": [
+        "nft_contract"
+      ],
+      "properties": {
+        "nft_contract": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "description": "display the svg server contract information",
+      "type": "object",
+      "required": [
+        "svg_server"
+      ],
+      "properties": {
+        "svg_server": {
+          "type": "object",
+          "properties": {
+            "permit": {
+              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "display the multi sig address",
+      "type": "object",
+      "required": [
+        "multi_sig"
+      ],
+      "properties": {
+        "multi_sig": {
+          "type": "object",
+          "properties": {
+            "permit": {
+              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "Binary": {
+      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>",
+      "type": "string"
+    },
+    "HumanAddr": {
+      "type": "string"
+    },
+    "Permission": {
+      "type": "string",
+      "enum": [
+        "allowance",
+        "balance",
+        "history",
+        "owner"
+      ]
+    },
+    "Permit": {
+      "type": "object",
+      "required": [
+        "params",
+        "signature"
+      ],
+      "properties": {
+        "params": {
+          "$ref": "#/definitions/PermitParams"
+        },
+        "signature": {
+          "$ref": "#/definitions/PermitSignature"
+        }
+      }
+    },
+    "PermitParams": {
+      "type": "object",
+      "required": [
+        "allowed_tokens",
+        "chain_id",
+        "permissions",
+        "permit_name"
+      ],
+      "properties": {
+        "allowed_tokens": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HumanAddr"
+          }
+        },
+        "chain_id": {
+          "type": "string"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Permission"
+          }
+        },
+        "permit_name": {
+          "type": "string"
+        }
+      }
+    },
+    "PermitSignature": {
+      "type": "object",
+      "required": [
+        "pub_key",
+        "signature"
+      ],
+      "properties": {
+        "pub_key": {
+          "$ref": "#/definitions/PubKey"
+        },
+        "signature": {
+          "$ref": "#/definitions/Binary"
+        }
+      }
+    },
+    "PubKey": {
+      "type": "object",
+      "required": [
+        "type",
+        "value"
+      ],
+      "properties": {
+        "type": {
+          "description": "ignored, but must be \"tendermint/PubKeySecp256k1\" otherwise the verification will fail",
+          "type": "string"
+        },
+        "value": {
+          "description": "Secp256k1 PubKey",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Binary"
+            }
+          ]
+        }
+      }
+    },
+    "ViewerInfo": {
+      "description": "the address and viewing key making an authenticated query request",
+      "type": "object",
+      "required": [
+        "address",
+        "viewing_key"
+      ],
+      "properties": {
+        "address": {
+          "description": "querying address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          ]
+        },
+        "viewing_key": {
+          "description": "authentication key string",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
