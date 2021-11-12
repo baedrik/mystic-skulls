@@ -1,9 +1,10 @@
 #![allow(clippy::field_reassign_with_default)]
 pub mod contract;
 mod contract_info;
-mod metadata;
 pub mod msg;
 mod rand;
+mod server_msgs;
+mod snip721;
 pub mod state;
 mod storage;
 mod utils;

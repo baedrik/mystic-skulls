@@ -106,6 +106,28 @@
           }
         }
       }
+    },
+    {
+      "description": "response of minting skulls",
+      "type": "object",
+      "required": [
+        "mint"
+      ],
+      "properties": {
+        "mint": {
+          "type": "object",
+          "required": [
+            "skulls_minted"
+          ],
+          "properties": {
+            "skulls_minted": {
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {

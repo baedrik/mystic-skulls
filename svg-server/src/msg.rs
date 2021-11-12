@@ -122,7 +122,7 @@ pub enum HandleMsg {
         /// hiders to modify
         hiders: Vec<Dependencies>,
     },
-    /// allow a minter to add genes to prevent a future duplicates
+    /// allow a minter to add genes to prevent future duplicates
     AddGenes { genes: Vec<Vec<u8>> },
     /// disallow the use of a permit
     RevokePermit {
@@ -268,7 +268,7 @@ pub enum QueryMsg {
         /// max number of hiders to display
         limit: Option<u16>,
     },
-    /// creates a new and unique genetic image.  This can only be called by an authorized minter
+    /// creates new and unique genetic images.  This can only be called by an authorized minter
     NewGenes {
         /// address and viewing key of a minting contract
         viewer: ViewerInfo,

@@ -1,18 +1,22 @@
 use cosmwasm_std::{
-    to_binary, Api, CanonicalAddr, Env, Extern, HandleResponse, HandleResult, HumanAddr,
-    InitResponse, InitResult, Querier, QueryResult, ReadonlyStorage, StdError, StdResult, Storage,
+    to_binary, Api, BankMsg, CanonicalAddr, CosmosMsg, Env, Extern, HandleResponse, HandleResult,
+    HumanAddr, InitResponse, InitResult, Querier, QueryResult, ReadonlyStorage, StdError,
+    StdResult, Storage, Uint128,
 };
 use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
 
 use secret_toolkit::{
     permit::{validate, Permit, RevokedPermits},
     snip20::set_viewing_key_msg,
-    utils::{pad_handle_result, pad_query_result},
+    utils::{pad_handle_result, pad_query_result, HandleCallback, Query},
 };
 
-use crate::metadata::{Metadata, Trait};
-use crate::msg::{GeneInfo, HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, ViewerInfo};
+use crate::msg::{
+    BackgroundCount, HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, ViewerInfo,
+};
 use crate::rand::sha_256;
+use crate::server_msgs::{NewGenesResponse, ServerHandleMsg, ServerQueryMsg};
+use crate::snip721::{ImageInfo, Mint, SerialNumber, Snip721HandleMsg};
 use crate::state::{
     Config, CONFIG_KEY, MY_ADDRESS_KEY, PREFIX_REVOKED_PERMITS, PREFIX_VIEW_KEY, PRNG_SEED_KEY,
 };
@@ -93,6 +97,10 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> HandleResult {
     let response = match msg {
+        HandleMsg::Mint {
+            backgrounds,
+            entropy,
+        } => try_mint(deps, env, backgrounds, entropy),
         HandleMsg::CreateViewingKey { entropy } => try_create_key(deps, &env, &entropy),
         HandleMsg::SetViewingKey { key, .. } => try_set_key(deps, &env.message.sender, key),
         HandleMsg::AddAdmins { admins } => try_add_admins(deps, &env.message.sender, &admins),
@@ -104,6 +112,132 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::SetMintStatus { halt } => try_set_status(deps, &env.message.sender, halt),
     };
     pad_handle_result(response, BLOCK_SIZE)
+}
+
+/// Returns HandleResult
+///
+/// updates the minting status
+///
+/// # Arguments
+///
+/// * `deps` - a mutable reference to Extern containing all the contract's external dependencies
+/// * `env` - Env of contract's environment
+/// * `backgrounds` - list of backgrounds to mint with
+/// * `entropy` - entropy String for rng
+fn try_mint<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    backgrounds: Vec<String>,
+    entropy: String,
+) -> HandleResult {
+    let mut config: Config = load(&deps.storage, CONFIG_KEY)?;
+    if config.halt {
+        return Err(StdError::generic_err(
+            "The minter has been stopped.  No new tokens can be minted",
+        ));
+    }
+    // limited to 20 mints
+    let qty = backgrounds.len();
+    if qty > 20 {
+        return Err(StdError::generic_err(
+            "Only 20 Mystic Skulls may be minted at once",
+        ));
+    }
+    // stop minting at 10k
+    if (config.mint_cnt as usize) + qty > 10000 {
+        let remain = 10000 - config.mint_cnt;
+        return Err(StdError::generic_err(format!(
+            "Only {} Mystic Skulls are known to be left in the Secret Network graveyard",
+            remain
+        )));
+    }
+    // can't overflow if limited to 20, 1 SCRT is just testnet price
+    let price = Uint128(1000000 * (qty as u128));
+    if env.message.sent_funds.len() != 1
+        || env.message.sent_funds[0].amount != price
+        || env.message.sent_funds[0].denom != *"uscrt"
+    {
+        return Err(StdError::generic_err(format!(
+            "You must pay exactly {} uscrt for {} Mystic Skulls",
+            price, qty
+        )));
+    }
+    let ser_num = (config.mint_cnt as u32) + 1;
+    // update counts
+    config.mint_cnt += qty as u16;
+    for bg in backgrounds.iter() {
+        if let Some(bgc) = config.backgd_cnts.iter_mut().find(|b| b.background == *bg) {
+            bgc.count += 1;
+        } else {
+            config.backgd_cnts.push(BackgroundCount {
+                background: bg.clone(),
+                count: 1,
+            });
+        }
+    }
+    save(&mut deps.storage, CONFIG_KEY, &config)?;
+    let viewer = ViewerInfo {
+        address: env.contract.address.clone(),
+        viewing_key: config.viewing_key.clone(),
+    };
+    // get the genes
+    let svr_qry = ServerQueryMsg::NewGenes {
+        viewer,
+        height: env.block.height,
+        time: env.block.time,
+        sender: env.message.sender.clone(),
+        entropy,
+        backgrounds,
+    };
+    let server = config.svg_contract.into_humanized(&deps.api)?;
+    let collection = config.nft_contract.into_humanized(&deps.api)?;
+    let svr_resp: NewGenesResponse = svr_qry.query(
+        &deps.querier,
+        server.code_hash.clone(),
+        server.address.clone(),
+    )?;
+    let mut genes: Vec<Vec<u8>> = Vec::new();
+    let mut mints: Vec<Mint> = Vec::new();
+    let mut serial_number = SerialNumber {
+        mint_run: 1,
+        serial_number: ser_num,
+        quantity_minted_this_run: 10000,
+    };
+    for gene in svr_resp.new_genes.genes.into_iter() {
+        mints.push(Mint {
+            owner: env.message.sender.clone(),
+            public_metadata: None,
+            private_metadata: None,
+            serial_number: serial_number.clone(),
+            image_info: ImageInfo {
+                current: gene.current_image.clone(),
+                previous: gene.current_image,
+                natural: gene.genetic_image,
+                svg_server: None,
+            },
+        });
+        serial_number.serial_number += 1;
+        genes.push(gene.unique_check);
+    }
+    let mint_msg = Snip721HandleMsg::BatchMintNft { mints };
+    let add_gene_msg = ServerHandleMsg::AddGenes { genes };
+    let messages: Vec<CosmosMsg> = vec![
+        mint_msg.to_cosmos_msg(collection.code_hash, collection.address, None)?,
+        add_gene_msg.to_cosmos_msg(server.code_hash, server.address, None)?,
+        CosmosMsg::Bank(BankMsg::Send {
+            from_address: env.contract.address,
+            to_address: deps.api.human_address(&config.multi_sig)?,
+            amount: env.message.sent_funds,
+        }),
+    ];
+
+    Ok(HandleResponse {
+        messages,
+        log: vec![],
+        data: Some(to_binary(&HandleAnswer::Mint {
+            skulls_minted: qty as u16,
+        })?),
+    })
 }
 
 /// Returns HandleResult

@@ -21,6 +21,13 @@ pub struct InitMsg {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
+    /// Mint tokens
+    Mint {
+        /// list of backgrounds to mint
+        backgrounds: Vec<String>,
+        /// entropy used for rng
+        entropy: String,
+    },
     /// Create a viewing key
     CreateViewingKey { entropy: String },
     /// Set a viewing key
@@ -80,6 +87,10 @@ pub enum HandleAnswer {
     },
     RevokePermit {
         status: String,
+    },
+    /// response of minting skulls
+    Mint {
+        skulls_minted: u16,
     },
 }
 
@@ -155,17 +166,6 @@ pub struct BackgroundCount {
     pub background: String,
     /// number of tokens minted with this background
     pub count: u16,
-}
-
-/// genetic image information
-#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug)]
-pub struct GeneInfo {
-    /// image at time of minting
-    pub current_image: Vec<u8>,
-    /// complete genetic image
-    pub genetic_image: Vec<u8>,
-    /// image used for uniqueness checks
-    pub unique_check: Vec<u8>,
 }
 
 /// the address and viewing key making an authenticated query request

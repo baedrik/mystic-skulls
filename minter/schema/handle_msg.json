@@ -4,6 +4,35 @@
   "description": "Handle messages",
   "anyOf": [
     {
+      "description": "Mint tokens",
+      "type": "object",
+      "required": [
+        "mint"
+      ],
+      "properties": {
+        "mint": {
+          "type": "object",
+          "required": [
+            "backgrounds",
+            "entropy"
+          ],
+          "properties": {
+            "backgrounds": {
+              "description": "list of backgrounds to mint",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "entropy": {
+              "description": "entropy used for rng",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
       "description": "Create a viewing key",
       "type": "object",
       "required": [

@@ -1,6 +1,66 @@
+use crate::contract::BLOCK_SIZE;
+use cosmwasm_std::HumanAddr;
 use schemars::JsonSchema;
+use secret_toolkit::utils::HandleCallback;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+
+/// snip721 handle msgs.
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Snip721HandleMsg {
+    /// Mint multiple tokens
+    BatchMintNft {
+        /// list of mint operations to perform
+        mints: Vec<Mint>,
+    },
+}
+
+impl HandleCallback for Snip721HandleMsg {
+    const BLOCK_SIZE: usize = BLOCK_SIZE;
+}
+
+/// token mint info used when doing a BatchMint
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+pub struct Mint {
+    /// owner address
+    pub owner: HumanAddr,
+    /// optional public metadata that can be seen by everyone
+    pub public_metadata: Option<Metadata>,
+    /// optional private metadata that can only be seen by owner and whitelist
+    pub private_metadata: Option<Metadata>,
+    /// serial number for this token
+    pub serial_number: SerialNumber,
+    /// the image info
+    pub image_info: ImageInfo,
+}
+
+/// data that determines a token's appearance
+#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug, Default)]
+pub struct ImageInfo {
+    /// current image svg index array
+    pub current: Vec<u8>,
+    /// previous image svg index array
+    pub previous: Vec<u8>,
+    /// complete initial genetic image svg index array
+    pub natural: Vec<u8>,
+    /// optional svg server contract if not using the default
+    pub svg_server: Option<HumanAddr>,
+}
+
+/// Serial number to give an NFT when minting
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct SerialNumber {
+    /// number of the mint run this token will be minted in.  This is
+    /// used to serialize identical NFTs
+    pub mint_run: u32,
+    /// serial number (in this mint run).  This is used to serialize
+    /// identical NFTs
+    pub serial_number: u32,
+    /// total number of NFTs minted on this run.  This is used to
+    /// represent that this token is number m of n
+    pub quantity_minted_this_run: u32,
+}
 
 /// token metadata
 #[skip_serializing_none]
