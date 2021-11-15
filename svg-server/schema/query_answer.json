@@ -279,9 +279,15 @@
         "new_genes": {
           "type": "object",
           "required": [
+            "collisions",
             "genes"
           ],
           "properties": {
+            "collisions": {
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
+            },
             "genes": {
               "type": "array",
               "items": {

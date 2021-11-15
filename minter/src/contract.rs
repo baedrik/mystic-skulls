@@ -147,7 +147,7 @@ fn try_mint<S: Storage, A: Api, Q: Querier>(
     if (config.mint_cnt as usize) + qty > 10000 {
         let remain = 10000 - config.mint_cnt;
         return Err(StdError::generic_err(format!(
-            "Only {} Mystic Skulls are known to be left in the Secret Network graveyard",
+            "Only {} Mystic Skulls are known to be left in the SN graveyard",
             remain
         )));
     }

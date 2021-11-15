@@ -525,7 +525,7 @@
       }
     },
     {
-      "description": "allow a minter to add genes to prevent a future duplicates",
+      "description": "allow a minter to add genes to prevent future duplicates",
       "type": "object",
       "required": [
         "add_genes"

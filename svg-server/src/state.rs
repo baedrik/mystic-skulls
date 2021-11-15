@@ -1,7 +1,6 @@
 use cosmwasm_std::{ReadonlyStorage, StdResult};
 use serde::{Deserialize, Serialize};
 
-use crate::metadata::Metadata;
 use crate::msg::{Dependencies, LayerId, StoredLayerId};
 
 /// storage key for the admins list
@@ -63,15 +62,6 @@ pub struct Variant {
     pub name: String,
     /// svg string if name is not `None`
     pub svg: Option<String>,
-}
-
-/// the metadata common to all NFTs
-#[derive(Serialize, Deserialize)]
-pub struct CommonMetadata {
-    /// common public metadata
-    pub public: Option<Metadata>,
-    /// common privae metadata
-    pub private: Option<Metadata>,
 }
 
 /// config values needed when rolling a new NFT

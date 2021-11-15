@@ -12,16 +12,16 @@ use secret_toolkit::{
 
 use crate::metadata::{Metadata, Trait};
 use crate::msg::{
-    CategoryInfo, Dependencies, ForcedVariants, GeneInfo, HandleAnswer, HandleMsg, InitMsg,
-    LayerId, QueryAnswer, QueryMsg, StoredLayerId, VariantInfo, VariantInfoPlus, VariantModInfo,
-    ViewerInfo, Weights,
+    CategoryInfo, CommonMetadata, Dependencies, ForcedVariants, GeneInfo, HandleAnswer, HandleMsg,
+    InitMsg, LayerId, QueryAnswer, QueryMsg, StoredLayerId, VariantInfo, VariantInfoPlus,
+    VariantModInfo, ViewerInfo, Weights,
 };
 use crate::rand::{extend_entropy, sha_256, Prng};
 use crate::state::{
-    Category, CommonMetadata, RollConfig, StoredDependencies, Variant, ADMINS_KEY,
-    DEPENDENCIES_KEY, HIDERS_KEY, METADATA_KEY, MINTERS_KEY, MY_ADDRESS_KEY, NUM_CATS_KEY,
-    PREFIX_CATEGORY, PREFIX_CATEGORY_MAP, PREFIX_GENE, PREFIX_REVOKED_PERMITS, PREFIX_VARIANT,
-    PREFIX_VARIANT_MAP, PREFIX_VIEW_KEY, PRNG_SEED_KEY, ROLL_CONF_KEY, VIEWERS_KEY,
+    Category, RollConfig, StoredDependencies, Variant, ADMINS_KEY, DEPENDENCIES_KEY, HIDERS_KEY,
+    METADATA_KEY, MINTERS_KEY, MY_ADDRESS_KEY, NUM_CATS_KEY, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP,
+    PREFIX_GENE, PREFIX_REVOKED_PERMITS, PREFIX_VARIANT, PREFIX_VARIANT_MAP, PREFIX_VIEW_KEY,
+    PRNG_SEED_KEY, ROLL_CONF_KEY, VIEWERS_KEY,
 };
 use crate::storage::{load, may_load, remove, save};
 use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
@@ -302,9 +302,7 @@ fn try_set_metadata<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::SetMetadata {
-            status: "success".to_string(),
-        })?),
+        data: Some(to_binary(&HandleAnswer::SetMetadata { metadata: common })?),
     })
 }
 
@@ -945,6 +943,7 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
     let mut var_cache: Vec<VarCache> = Vec::new();
     let mut back_cache: Vec<BackCache> = Vec::new();
     let mut genes: Vec<GeneInfo> = Vec::new();
+    let mut uniques: Vec<Vec<u8>> = Vec::new();
     // background is always the first layer
     let background_map = ReadonlyPrefixedStorage::multilevel(
         &[PREFIX_VARIANT_MAP, &0u8.to_le_bytes()],
@@ -983,14 +982,8 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
         gene_seed[*skip_cat as usize] = none_idx;
     }
 
-
-
-
-// TODO remove this
-let mut collisions = 0u16;    
-
-
-
+    // TODO remove this
+    let mut collisions = 0u16;
 
     for back in backgrounds.into_iter() {
         let background_idx: u8 = if let Some(bg) = back_cache.iter().find(|b| b.id == back) {
@@ -1022,13 +1015,9 @@ let mut collisions = 0u16;
                 &mut cat_cache,
                 &mut var_cache,
                 &gene_seed,
-
-
-// TODO remove this
-&mut collisions,
-
-
-
+                &mut uniques,
+                // TODO remove this
+                &mut collisions,
             )?;
             if !reroll {
                 genes.push(GeneInfo {
@@ -1041,11 +1030,9 @@ let mut collisions = 0u16;
         }
     }
 
-    to_binary(&QueryAnswer::NewGenes { genes
-    
-// TODO remove this
-,collisions,
-    
+    to_binary(&QueryAnswer::NewGenes {
+        genes, // TODO remove this
+        collisions,
     })
 }
 
@@ -2017,12 +2004,20 @@ fn draw_variant(prng: &mut Prng, weights: &[u16]) -> u8 {
 /// * `hiders` - list of variants that hide other variants
 /// * `numcats` - total number of categories
 /// * `none_cache` - list of None trait variants that have already been retrieved
+/// * `is_cyclops` - true if the skull is a cyclops
+/// * `is_jawless` - true if the skull is jawless
+/// * `roll_first` - list of categories that were rolled first
+/// * `uniques` - list of uniqueness masks for the current batch of new genes
 fn check_unique<S: ReadonlyStorage>(
     storage: &S,
     genetic: &[u8],
     hiders: &[StoredDependencies],
     numcats: u8,
     none_cache: &mut Vec<StoredLayerId>,
+    is_cyclops: bool,
+    is_jawless: bool,
+    roll_first: &[u8],
+    uniques: &mut Vec<Vec<u8>>,
 ) -> StdResult<Option<Vec<u8>>> {
     let mut temp: Vec<u8> = genetic.to_owned();
     for idx in 1u8..numcats {
@@ -2058,12 +2053,22 @@ fn check_unique<S: ReadonlyStorage>(
             }
         }
     }
-    // don't consider background
-    let unique = temp.split_off(1);
+    // don't consider background or archetype categories
+    let mut unique: Vec<u8> = Vec::new();
+    for i in 1u8..numcats {
+        if !roll_first.contains(&i) {
+            unique.push(temp[i as usize]);
+        }
+    }
+    // add eye and jaw type
+    unique.push(is_cyclops as u8);
+    unique.push(is_jawless as u8);
     let gene_store = ReadonlyPrefixedStorage::new(PREFIX_GENE, storage);
-    let resp = if may_load::<bool, _>(&gene_store, &unique)?.is_some() {
+    let resp = if uniques.contains(&unique) || may_load::<bool, _>(&gene_store, &unique)?.is_some()
+    {
         None
     } else {
+        uniques.push(unique.clone());
         Some(unique)
     };
     Ok(resp)
@@ -2107,6 +2112,7 @@ pub struct BackCache {
 /// * `cat_cache` - list of Categories that have already been retrieved
 /// * `var_cache` - list of Variants that have already been retrieved
 /// * `gene_seed` - starting seed for the gene including skipped categories and background
+/// * `uniques` - list of uniqueness masks for the current batch of new genes
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn new_gene_impl<S: ReadonlyStorage>(
     storage: &S,
@@ -2121,10 +2127,10 @@ fn new_gene_impl<S: ReadonlyStorage>(
     cat_cache: &mut Vec<CatCache>,
     var_cache: &mut Vec<VarCache>,
     gene_seed: &[u8],
+    uniques: &mut Vec<Vec<u8>>,
 
-// TODO remove this
+    // TODO remove this
     collisions: &mut u16,
-
 ) -> StdResult<(bool, Vec<u8>, Vec<u8>, Vec<u8>)> {
     // define some storages
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, storage);
@@ -2217,15 +2223,22 @@ fn new_gene_impl<S: ReadonlyStorage>(
     loop {
         // if already rolled every trait
         if idx >= numcats {
-            if let Some(unique_check) =
-                check_unique(storage, &genetic_image, hiders, numcats, none_cache)?
-            {
+            if let Some(unique_check) = check_unique(
+                storage,
+                &genetic_image,
+                hiders,
+                numcats,
+                none_cache,
+                is_cyclops,
+                is_jawless,
+                &roll.first,
+                uniques,
+            )? {
                 return Ok((false, current_image, genetic_image, unique_check));
             }
 
-// TODO remove this
-*collisions += 1;
-
+            // TODO remove this
+            *collisions += 1;
 
             // if skipping everything, return to try rerolling everything
             if skipping.iter().all(|b| *b) {
@@ -2301,16 +2314,22 @@ fn new_gene_impl<S: ReadonlyStorage>(
             );
             // if already rolled every trait, see if you have a unique gene
             if !first_pass {
-                if let Some(unique_check) =
-                    check_unique(storage, &genetic_image, hiders, numcats, none_cache)?
-                {
+                if let Some(unique_check) = check_unique(
+                    storage,
+                    &genetic_image,
+                    hiders,
+                    numcats,
+                    none_cache,
+                    is_cyclops,
+                    is_jawless,
+                    &roll.first,
+                    uniques,
+                )? {
                     return Ok((false, current_image, genetic_image, unique_check));
                 }
 
-// TODO remove this
-*collisions += 1;
-
-
+                // TODO remove this
+                *collisions += 1;
             }
         }
         idx += 1;

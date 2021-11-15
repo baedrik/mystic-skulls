@@ -362,7 +362,7 @@
       }
     },
     {
-      "description": "creates a new and unique genetic image.  This can only be called by an authorized minter",
+      "description": "creates new and unique genetic images.  This can only be called by an authorized minter",
       "type": "object",
       "required": [
         "new_genes"

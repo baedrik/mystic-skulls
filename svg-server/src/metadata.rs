@@ -1,9 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
 
 /// token metadata
-#[skip_serializing_none]
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug, Default)]
 pub struct Metadata {
     /// optional uri for off-chain metadata.  This should be prefixed with `http://`, `https://`, `ipfs://`, or
@@ -18,7 +16,6 @@ pub struct Metadata {
 /// https://docs.opensea.io/docs/metadata-standards and are the metadata fields that
 /// Stashh uses for robust NFT display.  Urls should be prefixed with `http://`, `https://`, `ipfs://`, or
 /// `ar://`
-#[skip_serializing_none]
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug, Default)]
 pub struct Extension {
     /// url to the image
@@ -49,7 +46,6 @@ pub struct Extension {
 }
 
 /// attribute trait
-#[skip_serializing_none]
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug, Default)]
 pub struct Trait {
     /// indicates how a trait should be displayed
@@ -63,7 +59,6 @@ pub struct Trait {
 }
 
 /// media file
-#[skip_serializing_none]
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug, Default)]
 pub struct MediaFile {
     /// file type
@@ -78,7 +73,6 @@ pub struct MediaFile {
 }
 
 /// media file authentication
-#[skip_serializing_none]
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Debug, Default)]
 pub struct Authentication {
     /// either a decryption key for encrypted files or a password for basic authentication

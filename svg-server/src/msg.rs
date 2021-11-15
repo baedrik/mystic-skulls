@@ -164,7 +164,7 @@ pub enum HandleAnswer {
     /// response from modifying existing trait variants
     ModifyVariants { status: String },
     /// response from setting common metadata
-    SetMetadata { status: String },
+    SetMetadata { metadata: CommonMetadata },
     /// response from setting the roll config
     SetRollConfig { status: String },
     /// response from adding dependencies
@@ -357,12 +357,9 @@ pub enum QueryAnswer {
         hiders: Vec<Dependencies>,
     },
     /// response from creating a new genetic images
-    NewGenes { genes: Vec<GeneInfo> 
-    
-// TODO remove this
-,collisions: u16,    
-    
-    
+    NewGenes {
+        genes: Vec<GeneInfo>, // TODO remove this
+        collisions: u16,
     },
 }
 
@@ -557,4 +554,13 @@ impl StoredLayerId {
             variant: var.name,
         })
     }
+}
+
+/// the metadata common to all NFTs
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct CommonMetadata {
+    /// common public metadata
+    pub public: Option<Metadata>,
+    /// common privae metadata
+    pub private: Option<Metadata>,
 }
