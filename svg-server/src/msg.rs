@@ -14,6 +14,10 @@ use serde::{Deserialize, Serialize};
 /// Instantiation message
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct InitMsg {
+    /// weight for jawed skulls
+    pub jaw_weight: u16,
+    /// weight for jawless skulls
+    pub jawless_weight: u16,
     /// entropy used for prng seed
     pub entropy: String,
 }
@@ -84,13 +88,15 @@ pub enum HandleMsg {
         /// common private metadata
         private_metadata: Option<Metadata>,
     },
-    /// Sets the layer categories to skip when rolling and which categories
-    /// must be rolled first instead of in layer order
+    /// Sets the layer categories to skip when rolling and the weightings for jawed vs
+    /// jawless skulls
     SetRollConfig {
         /// names of the layer categories to skip when rolling
-        skip: Vec<String>,
-        /// names of layers that must be rolled first
-        first: Vec<String>,
+        skip: Option<Vec<String>>,
+        /// weight for jawed skulls
+        jaw_weight: Option<u16>,
+        /// weight for jawless skulls
+        jawless_weight: Option<u16>,
     },
     /// add dependencies for traits that have multiple layers
     AddDependencies {
@@ -235,8 +241,8 @@ pub enum QueryMsg {
         /// are provided, the viewer will be ignored
         permit: Option<Permit>,
     },
-    /// displays the layer categories that get skipped during rolls and the ones
-    /// that must be rolled first (and total number of categories)
+    /// displays the layer categories that get skipped during rolls and the weights of
+    /// jawed vs jawless skulls
     RollConfig {
         /// optional address and viewing key of an admin, minter, or viewer
         viewer: Option<ViewerInfo>,
@@ -334,15 +340,17 @@ pub enum QueryAnswer {
         public_metadata: Option<Metadata>,
         private_metadata: Option<Metadata>,
     },
-    /// displays the layer categories that get skipped during rolls and the ones
-    /// that must be rolled first (and total number of categories)
+    /// displays the layer categories that get skipped during rolls and the weights
+    /// of jawed and jawless skulls
     RollConfig {
         /// number of categories
         category_count: u8,
         /// the categories that get skipped
         skip: Vec<String>,
-        /// the categories that must be rolled first
-        first: Vec<String>,
+        /// weight for jawed skulls
+        jaw_weight: u16,
+        /// weight for jawless skulls
+        jawless_weight: u16,
     },
     /// displays the trait variants with dependencies (multiple layers)
     Dependencies {

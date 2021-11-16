@@ -4,12 +4,26 @@
   "description": "Instantiation message",
   "type": "object",
   "required": [
-    "entropy"
+    "entropy",
+    "jaw_weight",
+    "jawless_weight"
   ],
   "properties": {
     "entropy": {
       "description": "entropy used for prng seed",
       "type": "string"
+    },
+    "jaw_weight": {
+      "description": "weight for jawed skulls",
+      "type": "integer",
+      "format": "uint16",
+      "minimum": 0.0
+    },
+    "jawless_weight": {
+      "description": "weight for jawless skulls",
+      "type": "integer",
+      "format": "uint16",
+      "minimum": 0.0
     }
   }
 }

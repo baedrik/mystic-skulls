@@ -117,9 +117,15 @@
         "mint": {
           "type": "object",
           "required": [
+            "collisions",
             "skulls_minted"
           ],
           "properties": {
+            "collisions": {
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
+            },
             "skulls_minted": {
               "type": "integer",
               "format": "uint16",

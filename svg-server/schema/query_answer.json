@@ -171,7 +171,7 @@
       }
     },
     {
-      "description": "displays the layer categories that get skipped during rolls and the ones that must be rolled first (and total number of categories)",
+      "description": "displays the layer categories that get skipped during rolls and the weights of jawed and jawless skulls",
       "type": "object",
       "required": [
         "roll_config"
@@ -181,7 +181,8 @@
           "type": "object",
           "required": [
             "category_count",
-            "first",
+            "jaw_weight",
+            "jawless_weight",
             "skip"
           ],
           "properties": {
@@ -191,12 +192,17 @@
               "format": "uint8",
               "minimum": 0.0
             },
-            "first": {
-              "description": "the categories that must be rolled first",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+            "jaw_weight": {
+              "description": "weight for jawed skulls",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "jawless_weight": {
+              "description": "weight for jawless skulls",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0.0
             },
             "skip": {
               "description": "the categories that get skipped",

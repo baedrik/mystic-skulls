@@ -13,8 +13,6 @@ pub const MINTERS_KEY: &[u8] = b"mntrs";
 pub const MY_ADDRESS_KEY: &[u8] = b"myaddr";
 /// storage key for prng seed
 pub const PRNG_SEED_KEY: &[u8] = b"prngseed";
-/// storage key for the category count
-pub const NUM_CATS_KEY: &[u8] = b"numcat";
 /// storage key for the roll config
 pub const ROLL_CONF_KEY: &[u8] = b"roolcf";
 /// storage key for the variant dependencies
@@ -71,8 +69,8 @@ pub struct RollConfig {
     pub cat_cnt: u8,
     /// layer indices to skip when rolling
     pub skip: Vec<u8>,
-    /// layer indices that must be rolled first
-    pub first: Vec<u8>,
+    /// weights for drawing jawed vs jawless
+    pub jaw_weights: Vec<u16>,
 }
 
 /// describes a trait that has multiple layers

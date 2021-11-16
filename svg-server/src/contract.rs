@@ -3,6 +3,7 @@ use cosmwasm_std::{
     InitResponse, InitResult, Querier, QueryResult, ReadonlyStorage, StdError, StdResult, Storage,
 };
 use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
+use serde::de::DeserializeOwned;
 use std::cmp::min;
 
 use secret_toolkit::{
@@ -19,9 +20,9 @@ use crate::msg::{
 use crate::rand::{extend_entropy, sha_256, Prng};
 use crate::state::{
     Category, RollConfig, StoredDependencies, Variant, ADMINS_KEY, DEPENDENCIES_KEY, HIDERS_KEY,
-    METADATA_KEY, MINTERS_KEY, MY_ADDRESS_KEY, NUM_CATS_KEY, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP,
-    PREFIX_GENE, PREFIX_REVOKED_PERMITS, PREFIX_VARIANT, PREFIX_VARIANT_MAP, PREFIX_VIEW_KEY,
-    PRNG_SEED_KEY, ROLL_CONF_KEY, VIEWERS_KEY,
+    METADATA_KEY, MINTERS_KEY, MY_ADDRESS_KEY, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP, PREFIX_GENE,
+    PREFIX_REVOKED_PERMITS, PREFIX_VARIANT, PREFIX_VARIANT_MAP, PREFIX_VIEW_KEY, PRNG_SEED_KEY,
+    ROLL_CONF_KEY, VIEWERS_KEY,
 };
 use crate::storage::{load, may_load, remove, save};
 use crate::viewing_key::{ViewingKey, VIEWING_KEY_SIZE};
@@ -53,7 +54,12 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     save(&mut deps.storage, PRNG_SEED_KEY, &prng_seed)?;
     let admins = vec![sender_raw];
     save(&mut deps.storage, ADMINS_KEY, &admins)?;
-    save(&mut deps.storage, NUM_CATS_KEY, &0u8)?;
+    let roll = RollConfig {
+        cat_cnt: 0u8,
+        skip: Vec::new(),
+        jaw_weights: vec![msg.jaw_weight, msg.jawless_weight],
+    };
+    save(&mut deps.storage, ROLL_CONF_KEY, &roll)?;
 
     Ok(InitResponse::default())
 }
@@ -74,9 +80,11 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     let response = match msg {
         HandleMsg::CreateViewingKey { entropy } => try_create_key(deps, &env, &entropy),
         HandleMsg::SetViewingKey { key, .. } => try_set_key(deps, &env.message.sender, key),
-        HandleMsg::SetRollConfig { skip, first } => {
-            try_set_roll_config(deps, &env.message.sender, skip, first)
-        }
+        HandleMsg::SetRollConfig {
+            skip,
+            jaw_weight,
+            jawless_weight,
+        } => try_set_roll_config(deps, &env.message.sender, skip, jaw_weight, jawless_weight),
         HandleMsg::AddCategories { categories } => {
             try_add_categories(deps, &env.message.sender, categories)
         }
@@ -195,13 +203,15 @@ fn try_add_gene<S: Storage, A: Api, Q: Querier>(
 ///
 /// * `deps` - a mutable reference to Extern containing all the contract's external dependencies
 /// * `sender` - a reference to the message sender
-/// * `skip` - list of categories to skip when rolling
-/// * `first` - list of categories that must be rolled first instead of in layer order
+/// * `skip` - optional list of categories to skip when rolling
+/// * `jaw_weight` - optional weight of jawed skulls
+/// * `jawless_weight` - optional weight of jawless skulls
 fn try_set_roll_config<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     sender: &HumanAddr,
-    skip: Vec<String>,
-    first: Vec<String>,
+    skip: Option<Vec<String>>,
+    jaw_weight: Option<u16>,
+    jawless_weight: Option<u16>,
 ) -> HandleResult {
     // only allow admins to do this
     let admins: Vec<CanonicalAddr> = load(&deps.storage, ADMINS_KEY)?;
@@ -209,34 +219,43 @@ fn try_set_roll_config<S: Storage, A: Api, Q: Querier>(
     if !admins.contains(&sender_raw) {
         return Err(StdError::unauthorized());
     }
-    let numcats: u8 = load(&deps.storage, NUM_CATS_KEY)?;
-    let mut roll: RollConfig = may_load(&deps.storage, ROLL_CONF_KEY)?.unwrap_or(RollConfig {
-        cat_cnt: 0u8,
-        skip: Vec::new(),
-        first: Vec::new(),
-    });
-    // map string names to indices
-    let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
-    let skip_idx = skip
-        .iter()
-        .map(|n| {
-            may_load::<u8, _>(&cat_map, n.as_bytes())?.ok_or_else(|| {
-                StdError::generic_err(format!("Category name:  {} does not exist", n))
+    let mut roll: RollConfig = load(&deps.storage, ROLL_CONF_KEY)?;
+    let mut save_it = false;
+    // if setting the skip list
+    if let Some(sk) = skip {
+        // map string names to indices
+        let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
+        let skip_idx = sk
+            .iter()
+            .map(|n| {
+                may_load::<u8, _>(&cat_map, n.as_bytes())?.ok_or_else(|| {
+                    StdError::generic_err(format!("Category name:  {} does not exist", n))
+                })
             })
-        })
-        .collect::<StdResult<Vec<u8>>>()?;
-    let first_idx = first
-        .iter()
-        .map(|n| {
-            may_load::<u8, _>(&cat_map, n.as_bytes())?.ok_or_else(|| {
-                StdError::generic_err(format!("Category name:  {} does not exist", n))
-            })
-        })
-        .collect::<StdResult<Vec<u8>>>()?;
-    roll.cat_cnt = numcats;
-    roll.skip = skip_idx;
-    roll.first = first_idx;
-    save(&mut deps.storage, ROLL_CONF_KEY, &roll)?;
+            .collect::<StdResult<Vec<u8>>>()?;
+        if roll.skip != skip_idx {
+            roll.skip = skip_idx;
+            save_it = true;
+        }
+    }
+    // if setting the jawed weight
+    if let Some(w) = jaw_weight {
+        if roll.jaw_weights[0] != w {
+            roll.jaw_weights[0] = w;
+            save_it = true;
+        }
+    }
+    // if setting the jawless weight
+    if let Some(w) = jawless_weight {
+        if roll.jaw_weights[1] != w {
+            roll.jaw_weights[1] = w;
+            save_it = true;
+        }
+    }
+    if save_it {
+        save(&mut deps.storage, ROLL_CONF_KEY, &roll)?;
+    }
+
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
@@ -483,7 +502,7 @@ fn try_add_categories<S: Storage, A: Api, Q: Querier>(
     if !admins.contains(&sender_raw) {
         return Err(StdError::unauthorized());
     }
-    let mut numcats: u8 = load(&deps.storage, NUM_CATS_KEY)?;
+    let mut roll: RollConfig = load(&deps.storage, ROLL_CONF_KEY)?;
     for cat_inf in categories.into_iter() {
         let cat_name_key = cat_inf.name.as_bytes();
         let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
@@ -496,7 +515,7 @@ fn try_add_categories<S: Storage, A: Api, Q: Querier>(
         let mut normal_weights: Vec<u16> = Vec::new();
         let mut jawless_weights: Option<Vec<u16>> = None;
         let mut cyclops_weights: Option<Vec<u16>> = None;
-        let cat_key = numcats.to_le_bytes();
+        let cat_key = roll.cat_cnt.to_le_bytes();
         let (cyclops, jawless) = add_variants(
             &mut deps.storage,
             &cat_key,
@@ -510,7 +529,7 @@ fn try_add_categories<S: Storage, A: Api, Q: Querier>(
         )?;
         // add the entry to the category map for this category name
         let mut cat_map = PrefixedStorage::new(PREFIX_CATEGORY_MAP, &mut deps.storage);
-        save(&mut cat_map, cat_name_key, &numcats)?;
+        save(&mut cat_map, cat_name_key, &roll.cat_cnt)?;
         let cat = Category {
             name: cat_inf.name,
             forced_cyclops: cyclops,
@@ -521,15 +540,18 @@ fn try_add_categories<S: Storage, A: Api, Q: Querier>(
         };
         let mut cat_store = PrefixedStorage::new(PREFIX_CATEGORY, &mut deps.storage);
         save(&mut cat_store, &cat_key, &cat)?;
-        numcats = numcats
+        roll.cat_cnt = roll
+            .cat_cnt
             .checked_add(1)
             .ok_or_else(|| StdError::generic_err("Reached maximum number of trait categories"))?;
     }
-    save(&mut deps.storage, NUM_CATS_KEY, &numcats)?;
+    save(&mut deps.storage, ROLL_CONF_KEY, &roll)?;
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
-        data: Some(to_binary(&HandleAnswer::AddCategories { count: numcats })?),
+        data: Some(to_binary(&HandleAnswer::AddCategories {
+            count: roll.cat_cnt,
+        })?),
     })
 }
 
@@ -928,20 +950,17 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
     let prng_seed: Vec<u8> = load(&deps.storage, PRNG_SEED_KEY)?;
     let rng_entropy = extend_entropy(height, time, sender, entropy.as_bytes());
     let mut rng = Prng::new(&prng_seed, &rng_entropy);
-    let numcats: u8 = load(&deps.storage, NUM_CATS_KEY)?;
-    let roll: RollConfig = may_load(&deps.storage, ROLL_CONF_KEY)?.unwrap_or(RollConfig {
-        cat_cnt: numcats,
-        skip: Vec::new(),
-        first: Vec::new(),
-    });
+    let roll: RollConfig = load(&deps.storage, ROLL_CONF_KEY)?;
     let depends: Vec<StoredDependencies> =
         may_load(&deps.storage, DEPENDENCIES_KEY)?.unwrap_or_else(Vec::new);
     let hiders: Vec<StoredDependencies> =
         may_load(&deps.storage, HIDERS_KEY)?.unwrap_or_else(Vec::new);
-    let mut cat_cache: Vec<CatCache> = Vec::new();
+    let mut cat_cache: Vec<RefCache<Category>> = Vec::new();
     let mut none_cache: Vec<StoredLayerId> = Vec::new();
-    let mut var_cache: Vec<VarCache> = Vec::new();
+    let mut skull_cache: Vec<RefCache<Variant>> = Vec::new();
+    let mut eye_type_cache: Vec<RefCache<Variant>> = Vec::new();
     let mut back_cache: Vec<BackCache> = Vec::new();
+    let mut chin_cache: Vec<BackCache> = Vec::new();
     let mut genes: Vec<GeneInfo> = Vec::new();
     let mut uniques: Vec<Vec<u8>> = Vec::new();
     // background is always the first layer
@@ -954,68 +973,41 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
         .ok_or_else(|| StdError::generic_err("Eye Type layer category not found"))?;
     let chin_idx: u8 = may_load(&cat_map, "Chin".as_bytes())?
         .ok_or_else(|| StdError::generic_err("Chin layer category not found"))?;
-
+    let skull_idx: u8 = may_load(&cat_map, "Skull".as_bytes())?
+        .ok_or_else(|| StdError::generic_err("Skull layer category not found"))?;
     // create the gene seed
-    let mut gene_seed: Vec<u8> = vec![255; numcats as usize];
+    let mut gene_seed: Vec<u8> = vec![255; roll.cat_cnt as usize];
     // any layers being skipped should be set to None
     for skip_cat in roll.skip.iter() {
-        let none_idx = if let Some(var) = none_cache.iter().find(|n| n.category == *skip_cat) {
-            var.variant
-        } else {
-            let var_map = ReadonlyPrefixedStorage::multilevel(
-                &[PREFIX_VARIANT_MAP, &skip_cat.to_le_bytes()],
-                &deps.storage,
-            );
-            let idx: u8 = may_load(&var_map, "None".as_bytes())?.ok_or_else(|| {
-                StdError::generic_err(format!(
-                    "Skipped category {} does not have a None variant",
-                    skip_cat
-                ))
-            })?;
-            // add to the none cache
-            none_cache.push(StoredLayerId {
-                category: *skip_cat,
-                variant: idx,
-            });
-            idx
-        };
+        let none_idx = use_none_cache(&deps.storage, *skip_cat, &mut none_cache)?;
         gene_seed[*skip_cat as usize] = none_idx;
     }
 
     // TODO remove this
     let mut collisions = 0u16;
-
+    let archetype_idxs = vec![skull_idx, chin_idx, eye_type_idx];
     for back in backgrounds.into_iter() {
-        let background_idx: u8 = if let Some(bg) = back_cache.iter().find(|b| b.id == back) {
-            bg.index
-        } else {
-            let back_idx: u8 = may_load(&background_map, back.as_bytes())?.ok_or_else(|| {
-                StdError::generic_err(format!("Background does not have a variant named {}", back))
-            })?;
-            let entry = BackCache {
-                id: back,
-                index: back_idx,
-            };
-            back_cache.push(entry);
-            back_idx
-        };
+        let background_idx = use_back_cache(&background_map, &back, &mut back_cache)?;
         gene_seed[0] = background_idx;
         let mut roll_it = true;
         while roll_it {
             let (reroll, current_image, genetic_image, unique_check) = new_gene_impl(
                 &deps.storage,
                 &mut rng,
-                numcats,
                 &roll,
                 &depends,
                 &hiders,
                 eye_type_idx,
                 chin_idx,
+                skull_idx,
                 &mut none_cache,
                 &mut cat_cache,
-                &mut var_cache,
+                &mut skull_cache,
+                &mut eye_type_cache,
+                &mut chin_cache,
                 &gene_seed,
                 &mut uniques,
+                &archetype_idxs,
                 // TODO remove this
                 &mut collisions,
             )?;
@@ -1050,13 +1042,8 @@ fn query_roll_config<S: Storage, A: Api, Q: Querier>(
     permit: Option<Permit>,
 ) -> QueryResult {
     // only allow admins to do this
-    let (_, _) = check_admin(deps, viewer, permit)?;
-    let numcats: u8 = load(&deps.storage, NUM_CATS_KEY)?;
-    let roll: RollConfig = may_load(&deps.storage, ROLL_CONF_KEY)?.unwrap_or(RollConfig {
-        cat_cnt: numcats,
-        skip: Vec::new(),
-        first: Vec::new(),
-    });
+    check_admin(deps, viewer, permit)?;
+    let roll: RollConfig = load(&deps.storage, ROLL_CONF_KEY)?;
     // map indices to string names
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
     let skip = roll
@@ -1068,20 +1055,12 @@ fn query_roll_config<S: Storage, A: Api, Q: Querier>(
                 .map(|r| r.name)
         })
         .collect::<StdResult<Vec<String>>>()?;
-    let first = roll
-        .first
-        .iter()
-        .map(|u| {
-            may_load::<Category, _>(&cat_store, &u.to_le_bytes())?
-                .ok_or_else(|| StdError::generic_err("Category storage is corrupt"))
-                .map(|r| r.name)
-        })
-        .collect::<StdResult<Vec<String>>>()?;
 
     to_binary(&QueryAnswer::RollConfig {
         category_count: roll.cat_cnt,
         skip,
-        first,
+        jaw_weight: roll.jaw_weights[0],
+        jawless_weight: roll.jaw_weights[1],
     })
 }
 
@@ -1228,17 +1207,17 @@ fn query_category<S: Storage, A: Api, Q: Querier>(
     let svgs = display_svg.unwrap_or(false);
     let max = limit.unwrap_or_else(|| if svgs { 5 } else { 30 });
     let start = start_at.unwrap_or(0);
-    let category_count: u8 = load(&deps.storage, NUM_CATS_KEY)?;
+    let roll: RollConfig = load(&deps.storage, ROLL_CONF_KEY)?;
     let cat_idx = if let Some(nm) = name {
         let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
         may_load::<u8, _>(&cat_map, nm.as_bytes())?.ok_or_else(|| {
             StdError::generic_err(format!("Category name:  {} does not exist", nm))
         })?
     } else if let Some(i) = index {
-        if i >= category_count {
+        if i >= roll.cat_cnt {
             return Err(StdError::generic_err(format!(
                 "There are only {} categories",
-                category_count
+                roll.cat_cnt
             )));
         }
         i
@@ -1282,7 +1261,7 @@ fn query_category<S: Storage, A: Api, Q: Querier>(
         })
         .transpose()?;
     to_binary(&QueryAnswer::Category {
-        category_count,
+        category_count: roll.cat_cnt,
         index: cat_idx,
         name: cat.name,
         forced_cyclops,
@@ -1363,11 +1342,7 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
         extension: None,
     });
     let mut xten = public_metadata.extension.unwrap_or_default();
-    let roll: RollConfig = may_load(&deps.storage, ROLL_CONF_KEY)?.unwrap_or(RollConfig {
-        cat_cnt: image.len() as u8,
-        skip: Vec::new(),
-        first: Vec::new(),
-    });
+    let roll: RollConfig = load(&deps.storage, ROLL_CONF_KEY)?;
     let mut image_data = r###"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -0.5 24 24" shape-rendering="crispEdges">"###.to_string();
     let mut attributes: Vec<Trait> = Vec::new();
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
@@ -2008,6 +1983,7 @@ fn draw_variant(prng: &mut Prng, weights: &[u16]) -> u8 {
 /// * `is_jawless` - true if the skull is jawless
 /// * `roll_first` - list of categories that were rolled first
 /// * `uniques` - list of uniqueness masks for the current batch of new genes
+#[allow(clippy::too_many_arguments)]
 fn check_unique<S: ReadonlyStorage>(
     storage: &S,
     genetic: &[u8],
@@ -2028,26 +2004,7 @@ fn check_unique<S: ReadonlyStorage>(
         if let Some(hider) = hiders.iter().find(|h| h.id == this_var) {
             for hidden in hider.correlated.iter() {
                 if genetic[hidden.category as usize] == hidden.variant {
-                    let none_idx = if let Some(var) =
-                        none_cache.iter().find(|n| n.category == hidden.category)
-                    {
-                        var.variant
-                    } else {
-                        let var_map = ReadonlyPrefixedStorage::multilevel(
-                            &[PREFIX_VARIANT_MAP, &hidden.category.to_le_bytes()],
-                            storage,
-                        );
-                        let idx: u8 = may_load(&var_map, "None".as_bytes())?.ok_or_else(|| {
-                            StdError::generic_err(
-                                "A hidden variant's category does not have a None variant",
-                            )
-                        })?;
-                        none_cache.push(StoredLayerId {
-                            category: hidden.category,
-                            variant: idx,
-                        });
-                        idx
-                    };
+                    let none_idx = use_none_cache(storage, hidden.category, none_cache)?;
                     temp[hidden.category as usize] = none_idx;
                 }
             }
@@ -2074,16 +2031,10 @@ fn check_unique<S: ReadonlyStorage>(
     Ok(resp)
 }
 
-/// used to cache categories
-pub struct CatCache {
+/// used to cache categories and variants
+pub struct RefCache<T> {
     pub index: u8,
-    pub category: Category,
-}
-
-/// used to cache variants
-pub struct VarCache {
-    pub id: StoredLayerId,
-    pub variant: Variant,
+    pub item: T,
 }
 
 /// used to cache backgrounds
@@ -2102,32 +2053,38 @@ pub struct BackCache {
 ///
 /// * `storage` - a reference to the contract's storage
 /// * `rng` - a mutable reference to the Prng
-/// * `numcats` - total number of categories
 /// * `roll` - a reference to the RollConfig
 /// * `depends` - list of traits that have multiple layers
 /// * `hiders` - list of variants that hide other variants
 /// * `eye_type_idx` - Eye Type category index
 /// * `chin_idx` - Chin category index
+/// * `skull_idx` - Skull category index
 /// * `none_cache` - list of None trait variants that have already been retrieved
 /// * `cat_cache` - list of Categories that have already been retrieved
-/// * `var_cache` - list of Variants that have already been retrieved
+/// * `skull_cache` - list of skull variants that have already been retrieved
+/// * `eye_type_cache` - list of eye type variants that have already been retrieved
+/// * `chin_cache` - list of chin variants that have already been retrieved
 /// * `gene_seed` - starting seed for the gene including skipped categories and background
 /// * `uniques` - list of uniqueness masks for the current batch of new genes
+/// * `archetype_idxs` - list of archetype category indices
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn new_gene_impl<S: ReadonlyStorage>(
     storage: &S,
     rng: &mut Prng,
-    numcats: u8,
     roll: &RollConfig,
     depends: &[StoredDependencies],
     hiders: &[StoredDependencies],
     eye_type_idx: u8,
     chin_idx: u8,
+    skull_idx: u8,
     none_cache: &mut Vec<StoredLayerId>,
-    cat_cache: &mut Vec<CatCache>,
-    var_cache: &mut Vec<VarCache>,
+    cat_cache: &mut Vec<RefCache<Category>>,
+    skull_cache: &mut Vec<RefCache<Variant>>,
+    eye_type_cache: &mut Vec<RefCache<Variant>>,
+    chin_cache: &mut Vec<BackCache>,
     gene_seed: &[u8],
     uniques: &mut Vec<Vec<u8>>,
+    archetype_idxs: &[u8],
 
     // TODO remove this
     collisions: &mut u16,
@@ -2138,100 +2095,82 @@ fn new_gene_impl<S: ReadonlyStorage>(
         &[PREFIX_VARIANT, &eye_type_idx.to_le_bytes()],
         storage,
     );
-    let chin_var_store =
-        ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &chin_idx.to_le_bytes()], storage);
-
-    let mut current_image: Vec<u8> = vec![255; numcats as usize];
+    let skull_var_store =
+        ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &skull_idx.to_le_bytes()], storage);
+    let chin_var_map = ReadonlyPrefixedStorage::multilevel(
+        &[PREFIX_VARIANT_MAP, &chin_idx.to_le_bytes()],
+        storage,
+    );
+    let mut current_image: Vec<u8> = vec![255; roll.cat_cnt as usize];
     let mut genetic_image: Vec<u8> = gene_seed.to_owned();
     let mut skipping: Vec<bool> = gene_seed.iter().map(|u| *u != 255u8).collect();
 
     // set the background
     current_image[0] = genetic_image[0];
-    let mut is_cyclops = false;
-    let mut is_jawless = false;
 
     // roll the ones that should be first
-    for inits in roll.first.iter() {
-        let cat = if let Some(c) = cat_cache.iter().find(|c| c.index == *inits) {
-            &c.category
-        } else {
-            let c: Category = may_load(&cat_store, &inits.to_le_bytes())?
-                .ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
-            cat_cache.push(CatCache {
-                index: *inits,
-                category: c,
-            });
-            &cat_cache
-                .last()
-                .ok_or_else(|| StdError::generic_err("We just pushed a CatCache!"))?
-                .category
-        };
-        let winner = draw_variant(rng, &cat.normal_weights);
-        // if we picked an eye type
-        if *inits == eye_type_idx {
-            let id = StoredLayerId {
-                category: eye_type_idx,
-                variant: winner,
-            };
-            let eye_type = if let Some(et) = var_cache.iter().find(|v| v.id == id) {
-                &et.variant
-            } else {
-                let variant: Variant = may_load(&eye_type_var_store, &winner.to_le_bytes())?
-                    .ok_or_else(|| StdError::generic_err("Eye Type variant storage is corrupt"))?;
-                var_cache.push(VarCache { id, variant });
-                &var_cache
-                    .last()
-                    .ok_or_else(|| StdError::generic_err("We just pushed a VarCache!"))?
-                    .variant
-            };
-            is_cyclops = eye_type.name == *"Cyclops";
-        } else if *inits == chin_idx {
-            let id = StoredLayerId {
-                category: chin_idx,
-                variant: winner,
-            };
-            let chin = if let Some(c) = var_cache.iter().find(|v| v.id == id) {
-                &c.variant
-            } else {
-                let variant: Variant = may_load(&chin_var_store, &winner.to_le_bytes())?
-                    .ok_or_else(|| StdError::generic_err("Chin variant storage is corrupt"))?;
-                var_cache.push(VarCache { id, variant });
-                &var_cache
-                    .last()
-                    .ok_or_else(|| StdError::generic_err("We just pushed a VarCache!"))?
-                    .variant
-            };
-            is_jawless = chin.name == *"None";
-        }
-        set_dependencies(
-            *inits,
-            winner,
-            depends,
-            &mut genetic_image,
-            Some(&mut current_image),
-            &mut skipping,
-        );
-        // archetype traits are revealed immediately
-        current_image[*inits as usize] = winner;
-        genetic_image[*inits as usize] = winner;
-        skipping[*inits as usize] = true;
-    }
+    // determine jaw type
+    let is_jawless = draw_variant(rng, &roll.jaw_weights) == 1;
+    // determine skull
+    let cat_cache_idx = use_ref_cache(&cat_store, skull_idx, cat_cache)?;
+    let skull_cat: &Category = &cat_cache
+        .get(cat_cache_idx)
+        .ok_or_else(|| StdError::generic_err("Skull_cat index out of bounds"))?
+        .item;
+    let skull = draw_variant(rng, &skull_cat.normal_weights);
+    // archetype traits are revealed immediately
+    current_image[skull_idx as usize] = skull;
+    genetic_image[skull_idx as usize] = skull;
+    skipping[skull_idx as usize] = true;
+    // if jawless, set chin to None
+    let chin_var = if is_jawless {
+        use_none_cache(storage, chin_idx, none_cache)?
+    } else {
+        // otherwise use the same chin as the skull type
+        let skull_cache_idx = use_ref_cache(&skull_var_store, skull, skull_cache)?;
+        let skull_var: &Variant = &skull_cache
+            .get(skull_cache_idx)
+            .ok_or_else(|| StdError::generic_err("Skull cache index out of bounds"))?
+            .item;
+        use_back_cache(&chin_var_map, &skull_var.name, chin_cache)?
+    };
+    // archetype traits are revealed immediately
+    current_image[chin_idx as usize] = chin_var;
+    genetic_image[chin_idx as usize] = chin_var;
+    skipping[chin_idx as usize] = true;
+    // determine eye type
+    let cat_cache_idx = use_ref_cache(&cat_store, eye_type_idx, cat_cache)?;
+    let et_cat: &Category = &cat_cache
+        .get(cat_cache_idx)
+        .ok_or_else(|| StdError::generic_err("Eye type cat index out of bounds"))?
+        .item;
+    let et = draw_variant(rng, &et_cat.normal_weights);
+    let eye_cache_idx = use_ref_cache(&eye_type_var_store, et, eye_type_cache)?;
+    let et_var: &Variant = &eye_type_cache
+        .get(eye_cache_idx)
+        .ok_or_else(|| StdError::generic_err("Eye type cache index out of bounds"))?
+        .item;
+    let is_cyclops = et_var.name == *"Cyclops";
+    // archetype traits are revealed immediately
+    current_image[eye_type_idx as usize] = et;
+    genetic_image[eye_type_idx as usize] = et;
+    skipping[eye_type_idx as usize] = true;
 
     let mut idx = 1u8;
     let mut first_pass = true;
     // roll the rest
     loop {
         // if already rolled every trait
-        if idx >= numcats {
+        if idx >= roll.cat_cnt {
             if let Some(unique_check) = check_unique(
                 storage,
                 &genetic_image,
                 hiders,
-                numcats,
+                roll.cat_cnt,
                 none_cache,
                 is_cyclops,
                 is_jawless,
-                &roll.first,
+                archetype_idxs,
                 uniques,
             )? {
                 return Ok((false, current_image, genetic_image, unique_check));
@@ -2253,20 +2192,11 @@ fn new_gene_impl<S: ReadonlyStorage>(
             .get(idx as usize)
             .ok_or_else(|| StdError::generic_err("Skipping index out of bounds"))?
         {
-            let cat = if let Some(c) = cat_cache.iter().find(|c| c.index == idx) {
-                &c.category
-            } else {
-                let c: Category = may_load(&cat_store, &idx.to_le_bytes())?
-                    .ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
-                cat_cache.push(CatCache {
-                    index: idx,
-                    category: c,
-                });
-                &cat_cache
-                    .last()
-                    .ok_or_else(|| StdError::generic_err("We just pushed a CatCache!"))?
-                    .category
-            };
+            let cat_cache_idx = use_ref_cache(&cat_store, idx, cat_cache)?;
+            let cat: &Category = &cat_cache
+                .get(cat_cache_idx)
+                .ok_or_else(|| StdError::generic_err("CatCache index out of bounds"))?
+                .item;
             // grab the right weight table
             let weights = if let Some(jawless) = cat.jawless_weights.as_ref() {
                 if is_jawless {
@@ -2318,11 +2248,11 @@ fn new_gene_impl<S: ReadonlyStorage>(
                     storage,
                     &genetic_image,
                     hiders,
-                    numcats,
+                    roll.cat_cnt,
                     none_cache,
                     is_cyclops,
                     is_jawless,
-                    &roll.first,
+                    archetype_idxs,
                     uniques,
                 )? {
                     return Ok((false, current_image, genetic_image, unique_check));
@@ -2450,4 +2380,90 @@ fn displ_variant<S: ReadonlyStorage>(
         hides_at_launch,
     };
     Ok(var_inf)
+}
+
+/// Returns StdResult<u8>
+///
+/// either retrieves a known None variant's index or determines it and adds it to
+/// the cache
+///
+/// # Arguments
+///
+/// * `storage` - a reference to the contract's storage
+/// * `category` - category index
+/// * `none_cache` - a mutable reference to the None cache
+fn use_none_cache<S: ReadonlyStorage>(
+    storage: &S,
+    category: u8,
+    none_cache: &mut Vec<StoredLayerId>,
+) -> StdResult<u8> {
+    if let Some(var) = none_cache.iter().find(|n| n.category == category) {
+        Ok(var.variant)
+    } else {
+        let var_map = ReadonlyPrefixedStorage::multilevel(
+            &[PREFIX_VARIANT_MAP, &category.to_le_bytes()],
+            storage,
+        );
+        let variant: u8 = may_load(&var_map, "None".as_bytes())?.ok_or_else(|| {
+            StdError::generic_err(format!(
+                "Did not find expected None variant for category {}",
+                category
+            ))
+        })?;
+        none_cache.push(StoredLayerId { category, variant });
+        Ok(variant)
+    }
+}
+
+/// Returns StdResult<u8>
+///
+/// either retrieves a known variant's index or determines it and adds it to
+/// the cache
+///
+/// # Arguments
+///
+/// * `map` - a reference to the variant map
+/// * `id` - variant name
+/// * `back_cache` - a mutable reference to the variant name cache
+fn use_back_cache<S: ReadonlyStorage>(
+    map: &S,
+    id: &str,
+    back_cache: &mut Vec<BackCache>,
+) -> StdResult<u8> {
+    if let Some(bg) = back_cache.iter().find(|b| b.id == id) {
+        Ok(bg.index)
+    } else {
+        let index: u8 = may_load(map, id.as_bytes())?
+            .ok_or_else(|| StdError::generic_err(format!("Did not find a variant named {}", id)))?;
+        let entry = BackCache {
+            id: id.to_string(),
+            index,
+        };
+        back_cache.push(entry);
+        Ok(index)
+    }
+}
+
+/// Returns StdResult<usize>
+///
+/// returns an item's position in the RefCache (adding it if necessary)
+///
+/// # Arguments
+///
+/// * `storage` - a reference to the storage subspace
+/// * `index` - index of the item to find
+/// * `ref_cache` - a mutable reference to the cache
+fn use_ref_cache<S: ReadonlyStorage, T: DeserializeOwned>(
+    storage: &S,
+    index: u8,
+    ref_cache: &mut Vec<RefCache<T>>,
+) -> StdResult<usize> {
+    if let Some(pos) = ref_cache.iter().position(|c| c.index == index) {
+        Ok(pos)
+    } else {
+        let item: T = may_load(storage, &index.to_le_bytes())?
+            .ok_or_else(|| StdError::generic_err("RefCache storage error"))?;
+        ref_cache.push(RefCache::<T> { index, item });
+        Ok(ref_cache.len() - 1)
+    }
 }

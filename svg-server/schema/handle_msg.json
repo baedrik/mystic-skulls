@@ -349,7 +349,7 @@
       }
     },
     {
-      "description": "Sets the layer categories to skip when rolling and which categories must be rolled first instead of in layer order",
+      "description": "Sets the layer categories to skip when rolling and the weightings for jawed vs jawless skulls",
       "type": "object",
       "required": [
         "set_roll_config"
@@ -357,21 +357,31 @@
       "properties": {
         "set_roll_config": {
           "type": "object",
-          "required": [
-            "first",
-            "skip"
-          ],
           "properties": {
-            "first": {
-              "description": "names of layers that must be rolled first",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+            "jaw_weight": {
+              "description": "weight for jawed skulls",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0.0
+            },
+            "jawless_weight": {
+              "description": "weight for jawless skulls",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "minimum": 0.0
             },
             "skip": {
               "description": "names of the layer categories to skip when rolling",
-              "type": "array",
+              "type": [
+                "array",
+                "null"
+              ],
               "items": {
                 "type": "string"
               }
