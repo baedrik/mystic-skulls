@@ -387,6 +387,8 @@ pub struct GeneInfo {
 pub struct VariantInfo {
     /// trait variant name
     pub name: String,
+    /// display name of the trait variant
+    pub display_name: String,
     /// svg data if name is not `None`
     pub svg: Option<String>,
     /// randomization weight for this trait variant if skull has 2 eyes and a jaw

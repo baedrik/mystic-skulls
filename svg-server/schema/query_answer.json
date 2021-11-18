@@ -602,6 +602,7 @@
       "description": "trait variant information",
       "type": "object",
       "required": [
+        "display_name",
         "name",
         "normal_weight"
       ],
@@ -614,6 +615,10 @@
           ],
           "format": "uint16",
           "minimum": 0.0
+        },
+        "display_name": {
+          "description": "display name of the trait variant",
+          "type": "string"
         },
         "jawless_weight": {
           "description": "randomization weight for this variant if jawless",

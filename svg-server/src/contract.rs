@@ -609,6 +609,7 @@ fn try_modify_variants<S: Storage, A: Api, Q: Querier>(
                 }
                 let var = Variant {
                     name: var_mod.modified_variant.name,
+                    display: var_mod.modified_variant.display_name,
                     svg: var_mod.modified_variant.svg,
                 };
                 let this_wgt = cat
@@ -971,8 +972,8 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
     let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
     let eye_type_idx: u8 = may_load(&cat_map, "Eye Type".as_bytes())?
         .ok_or_else(|| StdError::generic_err("Eye Type layer category not found"))?;
-    let chin_idx: u8 = may_load(&cat_map, "Chin".as_bytes())?
-        .ok_or_else(|| StdError::generic_err("Chin layer category not found"))?;
+    let chin_idx: u8 = may_load(&cat_map, "Jaw".as_bytes())?
+        .ok_or_else(|| StdError::generic_err("Jaw layer category not found"))?;
     let skull_idx: u8 = may_load(&cat_map, "Skull".as_bytes())?
         .ok_or_else(|| StdError::generic_err("Skull layer category not found"))?;
     // create the gene seed
@@ -1365,7 +1366,7 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
                 attributes.push(Trait {
                     display_type: None,
                     trait_type: Some(cat.name),
-                    value: var.name,
+                    value: var.display,
                     max_value: None,
                 });
                 revealed += 1;
@@ -1672,6 +1673,7 @@ fn add_variants<S: Storage>(
         }
         let var = Variant {
             name: var_inf.name,
+            display: var_inf.display_name,
             svg: var_inf.svg,
         };
         let var_name_key = var.name.as_bytes();
@@ -2150,7 +2152,7 @@ fn new_gene_impl<S: ReadonlyStorage>(
         .get(eye_cache_idx)
         .ok_or_else(|| StdError::generic_err("Eye type cache index out of bounds"))?
         .item;
-    let is_cyclops = et_var.name == *"Cyclops";
+    let is_cyclops = et_var.display == *"Cyclops";
     // archetype traits are revealed immediately
     current_image[eye_type_idx as usize] = et;
     genetic_image[eye_type_idx as usize] = et;
@@ -2352,6 +2354,7 @@ fn displ_variant<S: ReadonlyStorage>(
         index: id.variant,
         variant_info: VariantInfo {
             name: var.name,
+            display_name: var.display,
             svg: var.svg.filter(|_| svgs),
             normal_weight: *cat
                 .normal_weights

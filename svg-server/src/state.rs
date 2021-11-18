@@ -60,6 +60,8 @@ pub struct Variant {
     pub name: String,
     /// svg string if name is not `None`
     pub svg: Option<String>,
+    /// display name
+    pub display: String,
 }
 
 /// config values needed when rolling a new NFT
