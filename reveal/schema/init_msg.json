@@ -8,6 +8,7 @@
     "entropy",
     "nft_contract",
     "random_cooldown",
+    "svg_server",
     "target_cooldown"
   ],
   "properties": {
@@ -34,6 +35,14 @@
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
+    },
+    "svg_server": {
+      "description": "code hash and address of an svg server contract",
+      "allOf": [
+        {
+          "$ref": "#/definitions/ContractInfo"
+        }
+      ]
     },
     "target_cooldown": {
       "description": "cooldown period for targeted reveals",

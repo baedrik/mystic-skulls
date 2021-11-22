@@ -190,6 +190,31 @@
       }
     },
     {
+      "description": "set the viewing key with an svg server contract",
+      "type": "object",
+      "required": [
+        "set_key_with_server"
+      ],
+      "properties": {
+        "set_key_with_server": {
+          "type": "object",
+          "required": [
+            "svg_server"
+          ],
+          "properties": {
+            "svg_server": {
+              "description": "svg server code hash and address",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ContractInfo"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
       "description": "disallow the use of a permit",
       "type": "object",
       "required": [
@@ -212,6 +237,28 @@
     }
   ],
   "definitions": {
+    "ContractInfo": {
+      "description": "code hash and address of a secret contract",
+      "type": "object",
+      "required": [
+        "address",
+        "code_hash"
+      ],
+      "properties": {
+        "address": {
+          "description": "contract's address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          ]
+        },
+        "code_hash": {
+          "description": "contract's code hash string",
+          "type": "string"
+        }
+      }
+    },
     "HumanAddr": {
       "type": "string"
     },

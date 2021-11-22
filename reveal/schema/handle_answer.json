@@ -48,6 +48,25 @@
       }
     },
     {
+      "type": "object",
+      "required": [
+        "set_key_with_server"
+      ],
+      "properties": {
+        "set_key_with_server": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
       "description": "response of changing the revelation status",
       "type": "object",
       "required": [

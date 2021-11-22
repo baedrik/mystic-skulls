@@ -11,6 +11,7 @@ use secret_toolkit::{
     utils::{pad_handle_result, pad_query_result, HandleCallback, Query},
 };
 
+use crate::contract_info::ContractInfo;
 use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, RevealType};
 use crate::rand::{extend_entropy, sha_256, Prng};
 use crate::server_msgs::{
@@ -63,13 +64,22 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     save(&mut deps.storage, CONFIG_KEY, &config)?;
 
     Ok(InitResponse {
-        messages: vec![set_viewing_key_msg(
-            config.viewing_key.clone(),
-            None,
-            BLOCK_SIZE,
-            msg.nft_contract.code_hash,
-            msg.nft_contract.address,
-        )?],
+        messages: vec![
+            set_viewing_key_msg(
+                config.viewing_key.clone(),
+                None,
+                BLOCK_SIZE,
+                msg.nft_contract.code_hash,
+                msg.nft_contract.address,
+            )?,
+            set_viewing_key_msg(
+                config.viewing_key,
+                None,
+                BLOCK_SIZE,
+                msg.svg_server.code_hash,
+                msg.svg_server.address,
+            )?,
+        ],
         log: vec![],
     })
 }
@@ -107,6 +117,9 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             target_cooldown,
             all_cooldown,
         ),
+        HandleMsg::SetKeyWithServer { svg_server } => {
+            try_set_key_w_server(deps, &env.message.sender, svg_server)
+        }
         HandleMsg::Reveal {
             token_id,
             reveal_type,
@@ -249,6 +262,42 @@ fn try_set_status<S: Storage, A: Api, Q: Querier>(
         log: vec![],
         data: Some(to_binary(&HandleAnswer::SetRevealStatus {
             reveals_have_halted: halt,
+        })?),
+    })
+}
+
+/// Returns HandleResult
+///
+/// sets a viewing key with the svg server
+///
+/// # Arguments
+///
+/// * `deps` - a mutable reference to Extern containing all the contract's external dependencies
+/// * `sender` - a reference to the message sender
+/// * `svg_server` - ContractInfo of the svg server to set a key with
+fn try_set_key_w_server<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    sender: &HumanAddr,
+    svg_server: ContractInfo,
+) -> HandleResult {
+    // only allow admins to do this
+    let config: Config = load(&deps.storage, CONFIG_KEY)?;
+    let sender_raw = deps.api.canonical_address(sender)?;
+    if !config.admins.contains(&sender_raw) {
+        return Err(StdError::unauthorized());
+    }
+
+    Ok(HandleResponse {
+        messages: vec![set_viewing_key_msg(
+            config.viewing_key,
+            None,
+            BLOCK_SIZE,
+            svg_server.code_hash,
+            svg_server.address,
+        )?],
+        log: vec![],
+        data: Some(to_binary(&HandleAnswer::SetKeyWithServer {
+            status: "success".to_string(),
         })?),
     })
 }

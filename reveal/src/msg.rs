@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 pub struct InitMsg {
     /// code hash and address of the nft contract
     pub nft_contract: ContractInfo,
+    /// code hash and address of an svg server contract
+    pub svg_server: ContractInfo,
     /// entropy used for prng seed
     pub entropy: String,
     /// cooldown period for random reveals
@@ -64,6 +66,11 @@ pub enum HandleMsg {
         /// type of reveal to attempt
         reveal_type: RevealType,
     },
+    /// set the viewing key with an svg server contract
+    SetKeyWithServer {
+        /// svg server code hash and address
+        svg_server: ContractInfo,
+    },
     /// disallow the use of a permit
     RevokePermit {
         /// name of the permit that is no longer valid
@@ -83,6 +90,10 @@ pub enum HandleAnswer {
     /// response from creating a viewing key
     ViewingKey {
         key: String,
+    },
+    // response from setting a viewing key with an svg server
+    SetKeyWithServer {
+        status: String,
     },
     /// response of changing the revelation status
     SetRevealStatus {
