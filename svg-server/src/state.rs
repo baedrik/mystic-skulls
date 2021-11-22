@@ -1,7 +1,4 @@
-use cosmwasm_std::{ReadonlyStorage, StdResult};
 use serde::{Deserialize, Serialize};
-
-use crate::msg::{Dependencies, LayerId, StoredLayerId};
 
 /// storage key for the admins list
 pub const ADMINS_KEY: &[u8] = b"admin";
@@ -73,31 +70,4 @@ pub struct RollConfig {
     pub skip: Vec<u8>,
     /// weights for drawing jawed vs jawless
     pub jaw_weights: Vec<u16>,
-}
-
-/// describes a trait that has multiple layers
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct StoredDependencies {
-    /// id of the layer variant that has dependencies
-    pub id: StoredLayerId,
-    /// the other layers that are correlated to this variant
-    pub correlated: Vec<StoredLayerId>,
-}
-
-impl StoredDependencies {
-    /// Returns StdResult<Dependencies> from creating a Dependencies from a StoredDependencies
-    ///
-    /// # Arguments
-    ///
-    /// * `storage` - a reference to the contract storage
-    pub fn to_display<S: ReadonlyStorage>(&self, storage: &S) -> StdResult<Dependencies> {
-        Ok(Dependencies {
-            id: self.id.to_display(storage)?,
-            correlated: self
-                .correlated
-                .iter()
-                .map(|l| l.to_display(storage))
-                .collect::<StdResult<Vec<LayerId>>>()?,
-        })
-    }
 }

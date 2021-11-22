@@ -15,11 +15,11 @@ use crate::metadata::{Metadata, Trait};
 use crate::msg::{
     CategoryInfo, CommonMetadata, Dependencies, ForcedVariants, GeneInfo, HandleAnswer, HandleMsg,
     InitMsg, LayerId, QueryAnswer, QueryMsg, StoredLayerId, VariantInfo, VariantInfoPlus,
-    VariantModInfo, ViewerInfo, Weights,
+    VariantModInfo, ViewerInfo, Weights, StoredDependencies
 };
 use crate::rand::{extend_entropy, sha_256, Prng};
 use crate::state::{
-    Category, RollConfig, StoredDependencies, Variant, ADMINS_KEY, DEPENDENCIES_KEY, HIDERS_KEY,
+    Category, RollConfig, Variant, ADMINS_KEY, DEPENDENCIES_KEY, HIDERS_KEY,
     METADATA_KEY, MINTERS_KEY, MY_ADDRESS_KEY, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP, PREFIX_GENE,
     PREFIX_REVOKED_PERMITS, PREFIX_VARIANT, PREFIX_VARIANT_MAP, PREFIX_VIEW_KEY, PRNG_SEED_KEY,
     ROLL_CONF_KEY, VIEWERS_KEY,
@@ -916,8 +916,45 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
             permit,
             image,
         } => query_token_metadata(deps, viewer, permit, &image),
+        QueryMsg::ServeAlchemy { viewer } => query_serve_alchemy(deps, viewer),
     };
     pad_query_result(response, BLOCK_SIZE)
+}
+
+/// Returns QueryResult which provides the info needed by alchemy/reveal contracts
+///
+/// # Arguments
+///
+/// * `deps` - reference to Extern containing all the contract's external dependencies
+/// * `viewer` - address and key making an authenticated query request
+fn query_serve_alchemy<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    viewer: ViewerInfo,
+) -> QueryResult {
+    let (querier, _) = get_querier(deps, Some(viewer), None)?;
+    // only allow viewers to call this
+    let viewers: Vec<CanonicalAddr> =
+        may_load(&deps.storage, VIEWERS_KEY)?.unwrap_or_else(Vec::new);
+    if !viewers.contains(&querier) {
+        return Err(StdError::unauthorized());
+    }
+    let roll: RollConfig = load(&deps.storage, ROLL_CONF_KEY)?;
+    let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
+    let category_names = (0..roll.cat_cnt)
+        .map(|u| {
+            may_load::<Category, _>(&cat_store, &u.to_le_bytes())?
+                .ok_or_else(|| StdError::generic_err("Category storage is corrupt"))
+                .map(|r| r.name)
+        })
+        .collect::<StdResult<Vec<String>>>()?;
+    let dependencies: Vec<StoredDependencies> =
+        may_load(&deps.storage, DEPENDENCIES_KEY)?.unwrap_or_else(Vec::new);
+
+    to_binary(&QueryAnswer::ServeAlchemy {
+        skip: roll.skip,
+        dependencies,
+        category_names
+    })
 }
 
 /// Returns QueryResult which reveals the complete genetic image and current base reveal
@@ -1391,6 +1428,13 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
             max_value: None,
         });
     }
+    // this svg server is only used by pre-alchemy skulls
+    attributes.push(Trait {
+        display_type: None,
+        trait_type: Some("Alchemical Status".to_string()),
+        value: "Raw".to_string(),
+        max_value: None,
+    });
     image_data.push_str("</svg>");
     xten.image_data = Some(image_data);
     xten.attributes = Some(attributes);

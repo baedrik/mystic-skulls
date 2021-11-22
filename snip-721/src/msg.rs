@@ -962,8 +962,10 @@ pub enum QueryAnswer {
     DefaultSvgServer {
         default_svg_server: ContractInfo,
     },
-    /// display a token's ImageInfo
+    /// display a token's owner, its svg server, and ImageInfo
     ImageInfo {
+        owner: HumanAddr,
+        server_used: ContractInfo,
         image_info: ImageInfo,
     },
 }

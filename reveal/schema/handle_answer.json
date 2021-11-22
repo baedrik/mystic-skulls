@@ -28,26 +28,6 @@
       }
     },
     {
-      "description": "response of setting a new multi sig address",
-      "type": "object",
-      "required": [
-        "new_multi_sig"
-      ],
-      "properties": {
-        "new_multi_sig": {
-          "type": "object",
-          "required": [
-            "multi_sig"
-          ],
-          "properties": {
-            "multi_sig": {
-              "$ref": "#/definitions/HumanAddr"
-            }
-          }
-        }
-      }
-    },
-    {
       "description": "response from creating a viewing key",
       "type": "object",
       "required": [
@@ -68,20 +48,20 @@
       }
     },
     {
-      "description": "response of changing the minting status",
+      "description": "response of changing the revelation status",
       "type": "object",
       "required": [
-        "set_mint_status"
+        "set_reveal_status"
       ],
       "properties": {
-        "set_mint_status": {
+        "set_reveal_status": {
           "type": "object",
           "required": [
-            "minting_has_halted"
+            "reveals_have_halted"
           ],
           "properties": {
-            "minting_has_halted": {
-              "description": "true if minting has halted",
+            "reveals_have_halted": {
+              "description": "true if revelation has halted",
               "type": "boolean"
             }
           }
@@ -108,27 +88,60 @@
       }
     },
     {
-      "description": "response of minting skulls",
+      "description": "response of attempting a reveal",
       "type": "object",
       "required": [
-        "mint"
+        "reveal"
       ],
       "properties": {
-        "mint": {
+        "reveal": {
           "type": "object",
           "required": [
-            "collisions",
-            "skulls_minted"
+            "categories_revealed"
           ],
           "properties": {
-            "collisions": {
+            "categories_revealed": {
+              "description": "the trait categories revealed",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "response from setting cooldown periods",
+      "type": "object",
+      "required": [
+        "set_cooldowns"
+      ],
+      "properties": {
+        "set_cooldowns": {
+          "type": "object",
+          "required": [
+            "all_cooldown",
+            "random_cooldown",
+            "target_cooldown"
+          ],
+          "properties": {
+            "all_cooldown": {
+              "description": "cooldown period for revealing all",
               "type": "integer",
-              "format": "uint16",
+              "format": "uint64",
               "minimum": 0.0
             },
-            "skulls_minted": {
+            "random_cooldown": {
+              "description": "cooldown period for random reveals",
               "type": "integer",
-              "format": "uint16",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "target_cooldown": {
+              "description": "cooldown period for targeted reveals",
+              "type": "integer",
+              "format": "uint64",
               "minimum": 0.0
             }
           }

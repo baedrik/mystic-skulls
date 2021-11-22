@@ -1,6 +1,7 @@
-use crate::contract_info::StoreContractInfo;
+use crate::contract_info::{ContractInfo, StoreContractInfo};
 use crate::registry::Registry;
-use crate::state::PREFIX_SERVER_REGISTRY;
+use crate::state::load;
+use crate::state::{ServerInfo, PREFIX_SERVER_REGISTRY, SVG_INFO_KEY};
 use cosmwasm_std::{Api, Extern, HumanAddr, Querier, StdResult, Storage};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -64,8 +65,8 @@ pub struct StoredImageInfo {
 }
 
 impl StoredImageInfo {
-    /// Returns StdResult<ImageInfo> from converting a StoredImageInfo to an
-    /// ImageInfo
+    /// Returns StdResult<(ImageInfo, ContractInfo)> from converting a StoredImageInfo to an
+    /// ImageInfo and providing the contract info of the server used
     ///
     /// # Arguments
     ///
@@ -73,24 +74,26 @@ impl StoredImageInfo {
     pub fn into_human<S: Storage, A: Api, Q: Querier>(
         self,
         deps: &Extern<S, A, Q>,
-    ) -> StdResult<ImageInfo> {
-        let svg_server = self
-            .svg_server
-            .map(|i| {
-                let raw = Registry::<StoreContractInfo>::get_at(
-                    &deps.storage,
-                    i,
-                    PREFIX_SERVER_REGISTRY,
-                )?;
-                let svr = deps.api.human_address(&raw.address)?;
-                Ok(svr)
-            })
-            .transpose()?;
-        Ok(ImageInfo {
-            current: self.current,
-            previous: self.previous,
-            natural: self.natural,
-            svg_server,
-        })
+    ) -> StdResult<(ImageInfo, ContractInfo)> {
+        let svr_idx = self.svg_server.as_ref().map_or_else(
+            || {
+                let svr_inf: ServerInfo = load(&deps.storage, SVG_INFO_KEY)?;
+                Ok(svr_inf.default)
+            },
+            |i| Ok(*i),
+        )?;
+        let svr_raw =
+            Registry::<StoreContractInfo>::get_at(&deps.storage, svr_idx, PREFIX_SERVER_REGISTRY)?;
+        let svr_hum = svr_raw.into_humanized(&deps.api)?;
+        let svg_server = self.svg_server.map(|_| svr_hum.address.clone());
+        Ok((
+            ImageInfo {
+                current: self.current,
+                previous: self.previous,
+                natural: self.natural,
+                svg_server,
+            },
+            svr_hum,
+        ))
     }
 }

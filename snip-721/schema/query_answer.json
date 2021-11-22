@@ -681,7 +681,7 @@
       }
     },
     {
-      "description": "display a token's ImageInfo",
+      "description": "display a token's owner, its svg server, and ImageInfo",
       "type": "object",
       "required": [
         "image_info"
@@ -690,11 +690,19 @@
         "image_info": {
           "type": "object",
           "required": [
-            "image_info"
+            "image_info",
+            "owner",
+            "server_used"
           ],
           "properties": {
             "image_info": {
               "$ref": "#/definitions/ImageInfo"
+            },
+            "owner": {
+              "$ref": "#/definitions/HumanAddr"
+            },
+            "server_used": {
+              "$ref": "#/definitions/ContractInfo"
             }
           }
         }

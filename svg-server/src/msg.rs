@@ -1,7 +1,7 @@
 #![allow(clippy::large_enum_variant)]
 use crate::metadata::Metadata;
 use crate::state::{
-    Category, StoredDependencies, Variant, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP, PREFIX_VARIANT,
+    Category, Variant, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP, PREFIX_VARIANT,
     PREFIX_VARIANT_MAP,
 };
 use crate::storage::may_load;
@@ -299,6 +299,11 @@ pub enum QueryMsg {
         /// image indices
         image: Vec<u8>,
     },
+    /// display info that achemy/reveal contracts will need
+    ServeAlchemy {
+        /// address and viewing key of a reveal contract
+        viewer: ViewerInfo,
+    },
 }
 
 /// responses to queries
@@ -368,6 +373,15 @@ pub enum QueryAnswer {
     NewGenes {
         genes: Vec<GeneInfo>, // TODO remove this
         collisions: u16,
+    },
+    /// info needed by alchemy/reveal contracts
+    ServeAlchemy {
+        /// categories that are skipped when rolling/revealing
+        skip: Vec<u8>,
+        /// variant display dependencies
+        dependencies: Vec<StoredDependencies>,
+        /// category names
+        category_names: Vec<String>,
     },
 }
 
@@ -573,4 +587,31 @@ pub struct CommonMetadata {
     pub public: Option<Metadata>,
     /// common privae metadata
     pub private: Option<Metadata>,
+}
+
+/// describes a trait that has multiple layers
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct StoredDependencies {
+    /// id of the layer variant that has dependencies
+    pub id: StoredLayerId,
+    /// the other layers that are correlated to this variant
+    pub correlated: Vec<StoredLayerId>,
+}
+
+impl StoredDependencies {
+    /// Returns StdResult<Dependencies> from creating a Dependencies from a StoredDependencies
+    ///
+    /// # Arguments
+    ///
+    /// * `storage` - a reference to the contract storage
+    pub fn to_display<S: ReadonlyStorage>(&self, storage: &S) -> StdResult<Dependencies> {
+        Ok(Dependencies {
+            id: self.id.to_display(storage)?,
+            correlated: self
+                .correlated
+                .iter()
+                .map(|l| l.to_display(storage))
+                .collect::<StdResult<Vec<LayerId>>>()?,
+        })
+    }
 }

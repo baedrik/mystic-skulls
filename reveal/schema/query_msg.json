@@ -4,13 +4,13 @@
   "description": "Queries",
   "anyOf": [
     {
-      "description": "display the minting status",
+      "description": "display the revelation status",
       "type": "object",
       "required": [
-        "mint_status"
+        "reveal_status"
       ],
       "properties": {
-        "mint_status": {
+        "reveal_status": {
           "type": "object"
         }
       }
@@ -52,18 +52,6 @@
       }
     },
     {
-      "description": "display the mint counts",
-      "type": "object",
-      "required": [
-        "mint_counts"
-      ],
-      "properties": {
-        "mint_counts": {
-          "type": "object"
-        }
-      }
-    },
-    {
       "description": "display the nft contract information",
       "type": "object",
       "required": [
@@ -76,74 +64,14 @@
       }
     },
     {
-      "description": "display the svg server contract information",
+      "description": "display the cooldown periods",
       "type": "object",
       "required": [
-        "svg_server"
+        "cooldowns"
       ],
       "properties": {
-        "svg_server": {
-          "type": "object",
-          "properties": {
-            "permit": {
-              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Permit"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "viewer": {
-              "description": "optional address and viewing key of an admin",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/ViewerInfo"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "display the multi sig address",
-      "type": "object",
-      "required": [
-        "multi_sig"
-      ],
-      "properties": {
-        "multi_sig": {
-          "type": "object",
-          "properties": {
-            "permit": {
-              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Permit"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "viewer": {
-              "description": "optional address and viewing key of an admin",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/ViewerInfo"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          }
+        "cooldowns": {
+          "type": "object"
         }
       }
     }

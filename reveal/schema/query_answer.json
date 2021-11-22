@@ -28,20 +28,20 @@
       }
     },
     {
-      "description": "displays the minting status",
+      "description": "displays the revelation status",
       "type": "object",
       "required": [
-        "mint_status"
+        "reveal_status"
       ],
       "properties": {
-        "mint_status": {
+        "reveal_status": {
           "type": "object",
           "required": [
-            "minting_has_halted"
+            "reveals_have_halted"
           ],
           "properties": {
-            "minting_has_halted": {
-              "description": "true if minting has halted",
+            "reveals_have_halted": {
+              "description": "true if revelation has halted",
               "type": "boolean"
             }
           }
@@ -49,30 +49,36 @@
       }
     },
     {
-      "description": "displays the mint counts",
+      "description": "displays cooldown periods",
       "type": "object",
       "required": [
-        "mint_counts"
+        "cooldowns"
       ],
       "properties": {
-        "mint_counts": {
+        "cooldowns": {
           "type": "object",
           "required": [
-            "by_background",
-            "total"
+            "all_cooldown",
+            "random_cooldown",
+            "target_cooldown"
           ],
           "properties": {
-            "by_background": {
-              "description": "mint counts broken down by background variant",
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/BackgroundCount"
-              }
-            },
-            "total": {
-              "description": "total mint count",
+            "all_cooldown": {
+              "description": "cooldown period for revealing all",
               "type": "integer",
-              "format": "uint16",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "random_cooldown": {
+              "description": "cooldown period for random reveals",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "target_cooldown": {
+              "description": "cooldown period for targeted reveals",
+              "type": "integer",
+              "format": "uint64",
               "minimum": 0.0
             }
           }
@@ -98,69 +104,9 @@
           }
         }
       }
-    },
-    {
-      "description": "displays the svg server information",
-      "type": "object",
-      "required": [
-        "svg_server"
-      ],
-      "properties": {
-        "svg_server": {
-          "type": "object",
-          "required": [
-            "svg_server"
-          ],
-          "properties": {
-            "svg_server": {
-              "$ref": "#/definitions/ContractInfo"
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "displays the multi sig address",
-      "type": "object",
-      "required": [
-        "multi_sig"
-      ],
-      "properties": {
-        "multi_sig": {
-          "type": "object",
-          "required": [
-            "address"
-          ],
-          "properties": {
-            "address": {
-              "$ref": "#/definitions/HumanAddr"
-            }
-          }
-        }
-      }
     }
   ],
   "definitions": {
-    "BackgroundCount": {
-      "description": "background count",
-      "type": "object",
-      "required": [
-        "background",
-        "count"
-      ],
-      "properties": {
-        "background": {
-          "description": "name of the background variant",
-          "type": "string"
-        },
-        "count": {
-          "description": "number of tokens minted with this background",
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 0.0
-        }
-      }
-    },
     "ContractInfo": {
       "description": "code hash and address of a secret contract",
       "type": "object",

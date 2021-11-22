@@ -1994,11 +1994,21 @@ fn query_image_info<S: Storage, A: Api, Q: Querier>(
     let map2idx = ReadonlyPrefixedStorage::new(PREFIX_MAP_TO_INDEX, &deps.storage);
     let idx: u32 = may_load(&map2idx, token_id.as_bytes())?
         .ok_or_else(|| StdError::generic_err(format!("Token ID: {} not found", token_id)))?;
+    let token_key = idx.to_le_bytes();
     let image_store = ReadonlyPrefixedStorage::new(PREFIX_IMAGE_INFO, &deps.storage);
-    let raw: StoredImageInfo = may_load(&image_store, &idx.to_le_bytes())?
+    let raw: StoredImageInfo = may_load(&image_store, &token_key)?
         .ok_or_else(|| StdError::generic_err("StoredImageInfo storage is corrupt"))?;
-    let image_info = raw.into_human(deps)?;
-    to_binary(&QueryAnswer::ImageInfo { image_info })
+    let (image_info, server_used) = raw.into_human(deps)?;
+    let info_store = ReadonlyPrefixedStorage::new(PREFIX_INFOS, &deps.storage);
+    let token: Token = json_may_load(&info_store, &token_key)?.ok_or_else(|| {
+        StdError::generic_err(format!("Unable to find token info for {}", token_id))
+    })?;
+
+    to_binary(&QueryAnswer::ImageInfo {
+        owner: deps.api.human_address(&token.owner)?,
+        server_used,
+        image_info,
+    })
 }
 
 /// Returns QueryResult displaying the default svg server contract

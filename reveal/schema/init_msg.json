@@ -4,23 +4,22 @@
   "description": "Instantiation message",
   "type": "object",
   "required": [
+    "all_cooldown",
     "entropy",
-    "multi_sig",
     "nft_contract",
-    "svg_server"
+    "random_cooldown",
+    "target_cooldown"
   ],
   "properties": {
+    "all_cooldown": {
+      "description": "cooldown period for revealing all",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
     "entropy": {
       "description": "entropy used for prng seed",
       "type": "string"
-    },
-    "multi_sig": {
-      "description": "address of the multisig",
-      "allOf": [
-        {
-          "$ref": "#/definitions/HumanAddr"
-        }
-      ]
     },
     "nft_contract": {
       "description": "code hash and address of the nft contract",
@@ -30,13 +29,17 @@
         }
       ]
     },
-    "svg_server": {
-      "description": "code hash and address of the svg server contract",
-      "allOf": [
-        {
-          "$ref": "#/definitions/ContractInfo"
-        }
-      ]
+    "random_cooldown": {
+      "description": "cooldown period for random reveals",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "target_cooldown": {
+      "description": "cooldown period for targeted reveals",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
     }
   },
   "definitions": {

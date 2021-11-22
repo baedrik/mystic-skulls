@@ -11,6 +11,8 @@ pub const MY_ADDRESS_KEY: &[u8] = b"myaddr";
 pub const PRNG_SEED_KEY: &[u8] = b"prngseed";
 /// prefix for storage of viewing keys
 pub const PREFIX_VIEW_KEY: &[u8] = b"viewkeys";
+/// prefix for storage of timestamp of reveals
+pub const PREFIX_TIMESTAMP: &[u8] = b"time";
 /// prefix for the storage of revoked permits
 pub const PREFIX_REVOKED_PERMITS: &str = "revoke";
 
@@ -25,4 +27,10 @@ pub struct Config {
     pub admins: Vec<CanonicalAddr>,
     /// viewing key used with the nft contract
     pub viewing_key: String,
+    /// cooldown period for random reveals
+    pub random_cool: u64,
+    /// cooldown period for targeted reveals
+    pub target_cool: u64,
+    /// cooldown period for revealing all
+    pub all_cool: u64,
 }

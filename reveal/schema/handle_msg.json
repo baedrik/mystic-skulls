@@ -4,35 +4,6 @@
   "description": "Handle messages",
   "anyOf": [
     {
-      "description": "Mint tokens",
-      "type": "object",
-      "required": [
-        "mint"
-      ],
-      "properties": {
-        "mint": {
-          "type": "object",
-          "required": [
-            "backgrounds",
-            "entropy"
-          ],
-          "properties": {
-            "backgrounds": {
-              "description": "list of backgrounds to mint",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "entropy": {
-              "description": "entropy used for rng",
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    {
       "description": "Create a viewing key",
       "type": "object",
       "required": [
@@ -127,46 +98,92 @@
       }
     },
     {
-      "description": "change the multi sig address",
+      "description": "halt/start revelation",
       "type": "object",
       "required": [
-        "new_multi_sig"
+        "set_reveal_status"
       ],
       "properties": {
-        "new_multi_sig": {
-          "type": "object",
-          "required": [
-            "address"
-          ],
-          "properties": {
-            "address": {
-              "description": "new multi sig address",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/HumanAddr"
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
-      "description": "halt/start minting",
-      "type": "object",
-      "required": [
-        "set_mint_status"
-      ],
-      "properties": {
-        "set_mint_status": {
+        "set_reveal_status": {
           "type": "object",
           "required": [
             "halt"
           ],
           "properties": {
             "halt": {
-              "description": "true if minting should be halted",
+              "description": "true if revelation should be halted",
               "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "set cooldown periods",
+      "type": "object",
+      "required": [
+        "set_cooldowns"
+      ],
+      "properties": {
+        "set_cooldowns": {
+          "type": "object",
+          "properties": {
+            "all_cooldown": {
+              "description": "optional new cooldown period for revealing all",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "random_cooldown": {
+              "description": "optional new cooldown period for random reveals",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "target_cooldown": {
+              "description": "optional new cooldown period for targeted reveals",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "attempt to reveal a skull's trait(s)",
+      "type": "object",
+      "required": [
+        "reveal"
+      ],
+      "properties": {
+        "reveal": {
+          "type": "object",
+          "required": [
+            "reveal_type",
+            "token_id"
+          ],
+          "properties": {
+            "reveal_type": {
+              "description": "type of reveal to attempt",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/RevealType"
+                }
+              ]
+            },
+            "token_id": {
+              "description": "token id of the skull",
+              "type": "string"
             }
           }
         }
@@ -197,6 +214,59 @@
   "definitions": {
     "HumanAddr": {
       "type": "string"
+    },
+    "RevealType": {
+      "description": "types of reveal actions",
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "all"
+          ]
+        },
+        {
+          "description": "reveal a random triat",
+          "type": "object",
+          "required": [
+            "random"
+          ],
+          "properties": {
+            "random": {
+              "type": "object",
+              "required": [
+                "entropy"
+              ],
+              "properties": {
+                "entropy": {
+                  "description": "entropy string for randomization",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "reveal a specific trait",
+          "type": "object",
+          "required": [
+            "targeted"
+          ],
+          "properties": {
+            "targeted": {
+              "type": "object",
+              "required": [
+                "category"
+              ],
+              "properties": {
+                "category": {
+                  "description": "trait category to reveal",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

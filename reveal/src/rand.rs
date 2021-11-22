@@ -40,6 +40,10 @@ impl Prng {
 
         bytes
     }
+
+    pub fn get_rng(&mut self) -> &mut ChaChaRng {
+        &mut self.rng
+    }
 }
 
 pub fn extend_entropy(height: u64, time: u64, sender: &HumanAddr, entropy: &[u8]) -> Vec<u8> {
