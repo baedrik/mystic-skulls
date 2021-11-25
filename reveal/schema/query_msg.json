@@ -88,12 +88,34 @@
             "token_ids"
           ],
           "properties": {
+            "permit": {
+              "description": "optional permit used to verify owner identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "token_ids": {
               "description": "list of token IDs",
               "type": "array",
               "items": {
                 "type": "string"
               }
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an owner",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           }
         }

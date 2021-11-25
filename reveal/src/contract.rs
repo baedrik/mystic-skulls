@@ -17,7 +17,10 @@ use crate::rand::{extend_entropy, sha_256, Prng};
 use crate::server_msgs::{
     ServeAlchemyResponse, ServeAlchemyWrapper, ServerQueryMsg, StoredDependencies, StoredLayerId,
 };
-use crate::snip721::{ImageInfo, ImageInfoWrapper, Snip721HandleMsg, Snip721QueryMsg, ViewerInfo};
+use crate::snip721::{
+    ImageInfo, ImageInfoWrapper, IsOwnerWrapper, QueryWithPermit, Snip721HandleMsg,
+    Snip721QueryMsg, ViewerInfo,
+};
 use crate::state::{
     Config, CONFIG_KEY, MY_ADDRESS_KEY, PREFIX_REVOKED_PERMITS, PREFIX_TIMESTAMP, PREFIX_VIEW_KEY,
     PRNG_SEED_KEY,
@@ -541,7 +544,11 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
         QueryMsg::Cooldowns {} => query_cooldowns(&deps.storage),
         QueryMsg::Admins { viewer, permit } => query_admins(deps, viewer, permit),
         QueryMsg::NftContract {} => query_nft_contract(deps),
-        QueryMsg::LastRevealTimes { token_ids } => query_reveal_times(&deps.storage, token_ids),
+        QueryMsg::LastRevealTimes {
+            token_ids,
+            viewer,
+            permit,
+        } => query_reveal_times(deps, token_ids, viewer, permit),
     };
     pad_query_result(response, BLOCK_SIZE)
 }
@@ -550,10 +557,42 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
 ///
 /// # Arguments
 ///
-/// * `storage` - reference to the contract's storage
+/// * `deps` - reference to Extern containing all the contract's external dependencies
 /// * `token_ids` - list of tokens
-fn query_reveal_times<S: ReadonlyStorage>(storage: &S, token_ids: Vec<String>) -> QueryResult {
-    let time_store = ReadonlyPrefixedStorage::new(PREFIX_TIMESTAMP, storage);
+/// * `viewer_opt` - optional address and key making an authenticated query request
+/// * `permit_opt` - optional permit with "owner" permission
+fn query_reveal_times<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    token_ids: Vec<String>,
+    viewer_opt: Option<ViewerInfo>,
+    permit_opt: Option<Permit>,
+) -> QueryResult {
+    let config: Config = load(&deps.storage, CONFIG_KEY)?;
+    // verify ownership
+    let own_msg = if let Some(permit) = permit_opt {
+        Snip721QueryMsg::WithPermit {
+            permit,
+            query: QueryWithPermit::IsOwner {
+                token_ids: token_ids.clone(),
+            },
+        }
+    } else if let Some(viewer) = viewer_opt {
+        Snip721QueryMsg::IsOwner {
+            token_ids: token_ids.clone(),
+            viewer,
+        }
+    } else {
+        return Err(StdError::generic_err(
+            "A viewer or permit must be provided for this query",
+        ));
+    };
+    let collection = config.nft_contract.into_humanized(&deps.api)?;
+    let own_wrap: IsOwnerWrapper =
+        own_msg.query(&deps.querier, collection.code_hash, collection.address)?;
+    if !own_wrap.is_owner.is_owner {
+        return Err(StdError::unauthorized());
+    }
+    let time_store = ReadonlyPrefixedStorage::new(PREFIX_TIMESTAMP, &deps.storage);
     to_binary(&QueryAnswer::LastRevealTimes {
         last_reveals: token_ids
             .into_iter()

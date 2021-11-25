@@ -2,6 +2,7 @@ use crate::contract::BLOCK_SIZE;
 use crate::contract_info::ContractInfo;
 use cosmwasm_std::HumanAddr;
 use schemars::JsonSchema;
+use secret_toolkit::permit::Permit;
 use secret_toolkit::utils::{HandleCallback, Query};
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +33,20 @@ pub enum Snip721QueryMsg {
         token_id: String,
         /// address and viewing key of the querier
         viewer: ViewerInfo,
+    },
+    /// displays if the querier owns all the tokens in the list
+    IsOwner {
+        /// list of token IDs whose ownership is being checked
+        token_ids: Vec<String>,
+        /// address and viewing key of the owner
+        viewer: ViewerInfo,
+    },
+    /// perform queries by passing permits instead of viewing keys
+    WithPermit {
+        /// permit used to verify querier identity
+        permit: Permit,
+        /// query to perform
+        query: QueryWithPermit,
     },
 }
 
@@ -76,4 +91,27 @@ pub struct ImageInfoResponse {
 #[derive(Deserialize)]
 pub struct ImageInfoWrapper {
     pub image_info: ImageInfoResponse,
+}
+
+/// snip721 IsOwner response
+#[derive(Deserialize)]
+pub struct IsOwnerResponse {
+    pub is_owner: bool,
+}
+
+/// wrapper used to deserialize the snip721 IsOwner query
+#[derive(Deserialize)]
+pub struct IsOwnerWrapper {
+    pub is_owner: IsOwnerResponse,
+}
+
+/// queries using permits instead of viewing keys
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryWithPermit {
+    /// displays if the querier owns all the tokens in the list
+    IsOwner {
+        /// list of token IDs whose ownership is being checked
+        token_ids: Vec<String>,
+    },
 }

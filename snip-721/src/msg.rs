@@ -815,6 +815,13 @@ pub enum QueryMsg {
         /// address and viewing key of the querier
         viewer: ViewerInfo,
     },
+    /// displays if the querier owns all the tokens in the list
+    IsOwner {
+        /// list of token IDs whose ownership is being checked
+        token_ids: Vec<String>,
+        /// address and viewing key of the owner
+        viewer: ViewerInfo,
+    },
     /// perform queries by passing permits instead of viewing keys
     WithPermit {
         /// permit used to verify querier identity
@@ -822,6 +829,7 @@ pub enum QueryMsg {
         /// query to perform
         query: QueryWithPermit,
     },
+    /// TODO: remove this
     /// debug to view complete image
     Debug { token_id: String },
 }
@@ -968,6 +976,10 @@ pub enum QueryAnswer {
         server_used: ContractInfo,
         image_info: ImageInfo,
     },
+    /// displays if the querier owns all the tokens in the list
+    IsOwner {
+        is_owner: bool,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -1103,5 +1115,10 @@ pub enum QueryWithPermit {
     ImageInfo {
         /// token whose image info to display
         token_id: String,
+    },
+    /// displays if the querier owns all the tokens in the list
+    IsOwner {
+        /// list of token IDs whose ownership is being checked
+        token_ids: Vec<String>,
     },
 }

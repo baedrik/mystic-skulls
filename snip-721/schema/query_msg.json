@@ -690,6 +690,39 @@
       }
     },
     {
+      "description": "displays if the querier owns all the tokens in the list",
+      "type": "object",
+      "required": [
+        "is_owner"
+      ],
+      "properties": {
+        "is_owner": {
+          "type": "object",
+          "required": [
+            "token_ids",
+            "viewer"
+          ],
+          "properties": {
+            "token_ids": {
+              "description": "list of token IDs whose ownership is being checked",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "viewer": {
+              "description": "address and viewing key of the owner",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
       "description": "perform queries by passing permits instead of viewing keys",
       "type": "object",
       "required": [
@@ -724,7 +757,7 @@
       }
     },
     {
-      "description": "debug to view complete image",
+      "description": "TODO: remove this debug to view complete image",
       "type": "object",
       "required": [
         "debug"
@@ -1229,6 +1262,30 @@
                 "token_id": {
                   "description": "token whose image info to display",
                   "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "displays if the querier owns all the tokens in the list",
+          "type": "object",
+          "required": [
+            "is_owner"
+          ],
+          "properties": {
+            "is_owner": {
+              "type": "object",
+              "required": [
+                "token_ids"
+              ],
+              "properties": {
+                "token_ids": {
+                  "description": "list of token IDs whose ownership is being checked",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               }
             }

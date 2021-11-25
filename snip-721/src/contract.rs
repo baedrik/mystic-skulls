@@ -1783,6 +1783,10 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
         QueryMsg::ImageInfo { token_id, viewer } => {
             query_image_info(deps, Some(viewer), None, &token_id)
         }
+        QueryMsg::IsOwner { token_ids, viewer } => {
+            query_is_owner(deps, &token_ids, Some(viewer), None)
+        }
+        // TODO remove this
         QueryMsg::Debug { token_id } => query_debug(deps, &token_id),
     };
     pad_query_result(response, BLOCK_SIZE)
@@ -1962,6 +1966,9 @@ pub fn permit_queries<S: Storage, A: Api, Q: Querier>(
         QueryWithPermit::DefaultSvgServer {} => query_default_server(deps, None, Some(querier)),
         QueryWithPermit::ImageInfo { token_id } => {
             query_image_info(deps, None, Some(querier), &token_id)
+        }
+        QueryWithPermit::IsOwner { token_ids } => {
+            query_is_owner(deps, &token_ids, None, Some(querier))
         }
     }
 }
@@ -3108,6 +3115,53 @@ pub fn query_verify_approval<S: Storage, A: Api, Q: Querier>(
         approved_for_all: true,
         first_unapproved_token: None,
     })
+}
+
+/// Returns QueryResult after verifying that the specified address is the owner of all the
+/// listed tokens
+///
+/// # Arguments
+///
+/// * `deps` - a reference to Extern containing all the contract's external dependencies
+/// * `token_ids` - a list of token ids to check if the address is the owner
+/// * `viewer` - optional address and key making an authenticated query request
+/// * `from_permit` - address derived from an Owner permit, if applicable
+pub fn query_is_owner<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    token_ids: &[String],
+    viewer: Option<ViewerInfo>,
+    from_permit: Option<CanonicalAddr>,
+) -> StdResult<Binary> {
+    let address_raw = get_querier(deps, viewer, from_permit)?.ok_or_else(|| {
+        StdError::generic_err("This is being called incorrectly if there is no querier address")
+    })?;
+    let map2idx = ReadonlyPrefixedStorage::new(PREFIX_MAP_TO_INDEX, &deps.storage);
+    let info_store = ReadonlyPrefixedStorage::new(PREFIX_INFOS, &deps.storage);
+    let is_owner = if token_ids.is_empty() {
+        false
+    } else {
+        let mut owns = true;
+        for id in token_ids.iter() {
+            // if token exists
+            if let Some(idx) = may_load::<u32, _>(&map2idx, id.as_bytes())? {
+                let token: Token =
+                    json_may_load(&info_store, &idx.to_le_bytes())?.ok_or_else(|| {
+                        StdError::generic_err(format!("Unable to find token info for {}", id))
+                    })?;
+                if token.owner != address_raw {
+                    owns = false;
+                    break;
+                }
+            // token doesn't exist so not the owner
+            } else {
+                owns = false;
+                break;
+            }
+        }
+        owns
+    };
+
+    to_binary(&QueryAnswer::IsOwner { is_owner })
 }
 
 /// Returns QueryResult displaying the registered code hash of the specified contract if

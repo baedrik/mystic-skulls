@@ -141,6 +141,11 @@ pub enum QueryMsg {
     LastRevealTimes {
         /// list of token IDs
         token_ids: Vec<String>,
+        /// optional address and viewing key of an owner
+        viewer: Option<ViewerInfo>,
+        /// optional permit used to verify owner identity.  If both viewer and permit
+        /// are provided, the viewer will be ignored
+        permit: Option<Permit>,
     },
 }
 
