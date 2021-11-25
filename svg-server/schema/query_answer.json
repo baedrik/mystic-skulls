@@ -303,6 +303,48 @@
           }
         }
       }
+    },
+    {
+      "description": "info needed by alchemy/reveal contracts",
+      "type": "object",
+      "required": [
+        "serve_alchemy"
+      ],
+      "properties": {
+        "serve_alchemy": {
+          "type": "object",
+          "required": [
+            "category_names",
+            "dependencies",
+            "skip"
+          ],
+          "properties": {
+            "category_names": {
+              "description": "category names",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "dependencies": {
+              "description": "variant display dependencies",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/StoredDependencies"
+              }
+            },
+            "skip": {
+              "description": "categories that are skipped when rolling/revealing",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
@@ -561,6 +603,52 @@
             "string",
             "null"
           ]
+        }
+      }
+    },
+    "StoredDependencies": {
+      "description": "describes a trait that has multiple layers",
+      "type": "object",
+      "required": [
+        "correlated",
+        "id"
+      ],
+      "properties": {
+        "correlated": {
+          "description": "the other layers that are correlated to this variant",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StoredLayerId"
+          }
+        },
+        "id": {
+          "description": "id of the layer variant that has dependencies",
+          "allOf": [
+            {
+              "$ref": "#/definitions/StoredLayerId"
+            }
+          ]
+        }
+      }
+    },
+    "StoredLayerId": {
+      "description": "identifies a layer",
+      "type": "object",
+      "required": [
+        "category",
+        "variant"
+      ],
+      "properties": {
+        "category": {
+          "description": "the layer category",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "variant": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
         }
       }
     },

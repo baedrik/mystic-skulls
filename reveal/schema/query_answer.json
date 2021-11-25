@@ -104,6 +104,30 @@
           }
         }
       }
+    },
+    {
+      "description": "displays times of last reveal",
+      "type": "object",
+      "required": [
+        "last_reveal_times"
+      ],
+      "properties": {
+        "last_reveal_times": {
+          "type": "object",
+          "required": [
+            "last_reveals"
+          ],
+          "properties": {
+            "last_reveals": {
+              "description": "list of last reveal times",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TokenTime"
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
@@ -131,6 +155,28 @@
     },
     "HumanAddr": {
       "type": "string"
+    },
+    "TokenTime": {
+      "description": "timestamps associated with tokens",
+      "type": "object",
+      "required": [
+        "token_id"
+      ],
+      "properties": {
+        "timestamp": {
+          "description": "optional timestamp in seconds since 01/01/1970",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "token_id": {
+          "description": "token the timestamp corresponds to",
+          "type": "string"
+        }
+      }
     }
   }
 }

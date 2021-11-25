@@ -1,8 +1,7 @@
 #![allow(clippy::large_enum_variant)]
 use crate::metadata::Metadata;
 use crate::state::{
-    Category, Variant, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP, PREFIX_VARIANT,
-    PREFIX_VARIANT_MAP,
+    Category, Variant, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP, PREFIX_VARIANT, PREFIX_VARIANT_MAP,
 };
 use crate::storage::may_load;
 use cosmwasm_std::{HumanAddr, ReadonlyStorage, StdError, StdResult};

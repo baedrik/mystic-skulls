@@ -74,6 +74,30 @@
           "type": "object"
         }
       }
+    },
+    {
+      "description": "display the times tokens were last revealed",
+      "type": "object",
+      "required": [
+        "last_reveal_times"
+      ],
+      "properties": {
+        "last_reveal_times": {
+          "type": "object",
+          "required": [
+            "token_ids"
+          ],
+          "properties": {
+            "token_ids": {
+              "description": "list of token IDs",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {

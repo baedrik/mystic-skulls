@@ -2026,13 +2026,18 @@ fn query_default_server<S: Storage, A: Api, Q: Querier>(
     let viewer_raw = get_querier(deps, viewer, from_permit)?.ok_or_else(|| {
         StdError::generic_err("This is being called incorrectly if there is no querier address")
     })?;
-    // only allow admins to do this
-    let admins: Vec<CanonicalAddr> = load(&deps.storage, ADMINS_KEY)?;
-    if !admins.contains(&viewer_raw) {
-        return Err(StdError::generic_err(
-            "This is an admin command and can only be run from the admin address",
-        ));
+    // only allow admins and minters to do this
+    let minters: Vec<CanonicalAddr> =
+        may_load(&deps.storage, MINTERS_KEY)?.unwrap_or_else(Vec::new);
+    if !minters.contains(&viewer_raw) {
+        let admins: Vec<CanonicalAddr> = load(&deps.storage, ADMINS_KEY)?;
+        if !admins.contains(&viewer_raw) {
+            return Err(StdError::generic_err(
+                "This is an admin command and can only be run from the admin address",
+            ));
+        }
     }
+
     let svr_inf: ServerInfo = load(&deps.storage, SVG_INFO_KEY)?;
     let raw = Registry::<StoreContractInfo>::get_at(
         &deps.storage,

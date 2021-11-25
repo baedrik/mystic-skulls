@@ -12,7 +12,7 @@ use secret_toolkit::{
 };
 
 use crate::contract_info::ContractInfo;
-use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, RevealType};
+use crate::msg::{HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, RevealType, TokenTime};
 use crate::rand::{extend_entropy, sha_256, Prng};
 use crate::server_msgs::{
     ServeAlchemyResponse, ServeAlchemyWrapper, ServerQueryMsg, StoredDependencies, StoredLayerId,
@@ -541,8 +541,30 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
         QueryMsg::Cooldowns {} => query_cooldowns(&deps.storage),
         QueryMsg::Admins { viewer, permit } => query_admins(deps, viewer, permit),
         QueryMsg::NftContract {} => query_nft_contract(deps),
+        QueryMsg::LastRevealTimes { token_ids } => query_reveal_times(&deps.storage, token_ids),
     };
     pad_query_result(response, BLOCK_SIZE)
+}
+
+/// Returns QueryResult displaying the last reveal times for a list of tokens
+///
+/// # Arguments
+///
+/// * `storage` - reference to the contract's storage
+/// * `token_ids` - list of tokens
+fn query_reveal_times<S: ReadonlyStorage>(storage: &S, token_ids: Vec<String>) -> QueryResult {
+    let time_store = ReadonlyPrefixedStorage::new(PREFIX_TIMESTAMP, storage);
+    to_binary(&QueryAnswer::LastRevealTimes {
+        last_reveals: token_ids
+            .into_iter()
+            .map(|i| {
+                Ok(TokenTime {
+                    timestamp: may_load(&time_store, i.as_bytes())?,
+                    token_id: i,
+                })
+            })
+            .collect::<StdResult<Vec<TokenTime>>>()?,
+    })
 }
 
 /// Returns QueryResult displaying the admin list

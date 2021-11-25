@@ -14,13 +14,13 @@ use secret_toolkit::{
 use crate::metadata::{Metadata, Trait};
 use crate::msg::{
     CategoryInfo, CommonMetadata, Dependencies, ForcedVariants, GeneInfo, HandleAnswer, HandleMsg,
-    InitMsg, LayerId, QueryAnswer, QueryMsg, StoredLayerId, VariantInfo, VariantInfoPlus,
-    VariantModInfo, ViewerInfo, Weights, StoredDependencies
+    InitMsg, LayerId, QueryAnswer, QueryMsg, StoredDependencies, StoredLayerId, VariantInfo,
+    VariantInfoPlus, VariantModInfo, ViewerInfo, Weights,
 };
 use crate::rand::{extend_entropy, sha_256, Prng};
 use crate::state::{
-    Category, RollConfig, Variant, ADMINS_KEY, DEPENDENCIES_KEY, HIDERS_KEY,
-    METADATA_KEY, MINTERS_KEY, MY_ADDRESS_KEY, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP, PREFIX_GENE,
+    Category, RollConfig, Variant, ADMINS_KEY, DEPENDENCIES_KEY, HIDERS_KEY, METADATA_KEY,
+    MINTERS_KEY, MY_ADDRESS_KEY, PREFIX_CATEGORY, PREFIX_CATEGORY_MAP, PREFIX_GENE,
     PREFIX_REVOKED_PERMITS, PREFIX_VARIANT, PREFIX_VARIANT_MAP, PREFIX_VIEW_KEY, PRNG_SEED_KEY,
     ROLL_CONF_KEY, VIEWERS_KEY,
 };
@@ -953,7 +953,7 @@ fn query_serve_alchemy<S: Storage, A: Api, Q: Querier>(
     to_binary(&QueryAnswer::ServeAlchemy {
         skip: roll.skip,
         dependencies,
-        category_names
+        category_names,
     })
 }
 
@@ -1420,14 +1420,12 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
         }
     }
     let hidden = trait_cnt - revealed;
-    if hidden > 0 {
-        attributes.push(Trait {
-            display_type: None,
-            trait_type: Some("Hidden Traits".to_string()),
-            value: format!("{}", hidden),
-            max_value: None,
-        });
-    }
+    attributes.push(Trait {
+        display_type: None,
+        trait_type: Some("Hidden Traits".to_string()),
+        value: format!("{}", hidden),
+        max_value: None,
+    });
     // this svg server is only used by pre-alchemy skulls
     attributes.push(Trait {
         display_type: None,

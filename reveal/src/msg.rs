@@ -137,6 +137,11 @@ pub enum QueryMsg {
     NftContract {},
     /// display the cooldown periods
     Cooldowns {},
+    /// display the times tokens were last revealed
+    LastRevealTimes {
+        /// list of token IDs
+        token_ids: Vec<String>,
+    },
 }
 
 /// responses to queries
@@ -164,6 +169,20 @@ pub enum QueryAnswer {
     },
     /// displays the nft contract information
     NftContract { nft_contract: ContractInfo },
+    /// displays times of last reveal
+    LastRevealTimes {
+        /// list of last reveal times
+        last_reveals: Vec<TokenTime>,
+    },
+}
+
+/// timestamps associated with tokens
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct TokenTime {
+    /// token the timestamp corresponds to
+    pub token_id: String,
+    /// optional timestamp in seconds since 01/01/1970
+    pub timestamp: Option<u64>,
 }
 
 /// types of reveal actions

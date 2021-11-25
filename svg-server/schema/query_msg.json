@@ -469,6 +469,31 @@
           }
         }
       }
+    },
+    {
+      "description": "display info that achemy/reveal contracts will need",
+      "type": "object",
+      "required": [
+        "serve_alchemy"
+      ],
+      "properties": {
+        "serve_alchemy": {
+          "type": "object",
+          "required": [
+            "viewer"
+          ],
+          "properties": {
+            "viewer": {
+              "description": "address and viewing key of a reveal contract",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                }
+              ]
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
