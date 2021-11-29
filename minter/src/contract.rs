@@ -490,7 +490,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
     let response = match msg {
         QueryMsg::MintStatus {} => query_status(&deps.storage),
         QueryMsg::Admins { viewer, permit } => query_admins(deps, viewer, permit),
-        QueryMsg::MintCounts {} => query_counts(&deps.storage),
+        QueryMsg::MintCounts { viewer, permit } => query_counts(deps, viewer, permit),
         QueryMsg::NftContract {} => query_nft_contract(deps),
         QueryMsg::SvgServer { viewer, permit } => query_server(deps, viewer, permit),
         QueryMsg::MultiSig { viewer, permit } => query_multi_sig(deps, viewer, permit),
@@ -587,9 +587,16 @@ fn query_status<S: ReadonlyStorage>(storage: &S) -> QueryResult {
 ///
 /// # Arguments
 ///
-/// * `storage` - reference to the contract's storage
-fn query_counts<S: ReadonlyStorage>(storage: &S) -> QueryResult {
-    let config: Config = load(storage, CONFIG_KEY)?;
+/// * `deps` - reference to Extern containing all the contract's external dependencies
+/// * `viewer` - optional address and key making an authenticated query request
+/// * `permit` - optional permit with "owner" permission
+fn query_counts<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    viewer: Option<ViewerInfo>,
+    permit: Option<Permit>,
+) -> QueryResult {
+    // only allow admins to do this
+    let (config, _) = check_admin(deps, viewer, permit)?;
     to_binary(&QueryAnswer::MintCounts {
         total: config.mint_cnt,
         by_background: config.backgd_cnts,

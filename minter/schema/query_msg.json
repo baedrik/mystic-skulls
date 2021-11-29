@@ -59,7 +59,31 @@
       ],
       "properties": {
         "mint_counts": {
-          "type": "object"
+          "type": "object",
+          "properties": {
+            "permit": {
+              "description": "optional permit used to verify admin identity.  If both viewer and permit are provided, the viewer will be ignored",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Permit"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "viewer": {
+              "description": "optional address and viewing key of an admin",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ViewerInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
         }
       }
     },

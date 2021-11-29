@@ -112,7 +112,13 @@ pub enum QueryMsg {
         permit: Option<Permit>,
     },
     /// display the mint counts
-    MintCounts {},
+    MintCounts {
+        /// optional address and viewing key of an admin
+        viewer: Option<ViewerInfo>,
+        /// optional permit used to verify admin identity.  If both viewer and permit
+        /// are provided, the viewer will be ignored
+        permit: Option<Permit>,
+    },
     /// display the nft contract information
     NftContract {},
     /// display the svg server contract information
