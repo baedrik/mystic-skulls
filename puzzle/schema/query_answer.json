@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QueryAnswer",
+  "description": "responses to queries",
+  "anyOf": [
+    {
+      "description": "displays the admins list",
+      "type": "object",
+      "required": [
+        "admins"
+      ],
+      "properties": {
+        "admins": {
+          "type": "object",
+          "required": [
+            "admins"
+          ],
+          "properties": {
+            "admins": {
+              "description": "current admin list",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "list of already solved puzzles",
+      "type": "object",
+      "required": [
+        "solved"
+      ],
+      "properties": {
+        "solved": {
+          "type": "object",
+          "required": [
+            "puzzles"
+          ],
+          "properties": {
+            "puzzles": {
+              "description": "puzzle ids that have been solved",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "list of winners",
+      "type": "object",
+      "required": [
+        "winners"
+      ],
+      "properties": {
+        "winners": {
+          "type": "object",
+          "required": [
+            "winners"
+          ],
+          "properties": {
+            "winners": {
+              "description": "winners list",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Winner"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "HumanAddr": {
+      "type": "string"
+    },
+    "Keyphrase": {
+      "description": "keyphrase and puzzle id",
+      "type": "object",
+      "required": [
+        "keyphrase",
+        "puzzle"
+      ],
+      "properties": {
+        "keyphrase": {
+          "description": "sanitized keyphrase",
+          "type": "string"
+        },
+        "puzzle": {
+          "description": "puzzle id",
+          "type": "string"
+        }
+      }
+    },
+    "Winner": {
+      "description": "puzzle winner",
+      "type": "object",
+      "required": [
+        "puzzle_info"
+      ],
+      "properties": {
+        "puzzle_info": {
+          "description": "keyphrase",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Keyphrase"
+            }
+          ]
+        },
+        "winner": {
+          "description": "winner's address",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HumanAddr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

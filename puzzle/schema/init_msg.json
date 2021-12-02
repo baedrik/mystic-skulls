@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "InitMsg",
+  "description": "Instantiation message",
+  "type": "object",
+  "required": [
+    "entropy"
+  ],
+  "properties": {
+    "admins": {
+      "description": "admins in addition to the instantiator",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/HumanAddr"
+      }
+    },
+    "entropy": {
+      "description": "entropy used for prng seed",
+      "type": "string"
+    },
+    "keyphrases": {
+      "description": "list of keyphrases",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/Keyphrase"
+      }
+    }
+  },
+  "definitions": {
+    "HumanAddr": {
+      "type": "string"
+    },
+    "Keyphrase": {
+      "description": "keyphrase and puzzle id",
+      "type": "object",
+      "required": [
+        "keyphrase",
+        "puzzle"
+      ],
+      "properties": {
+        "keyphrase": {
+          "description": "sanitized keyphrase",
+          "type": "string"
+        },
+        "puzzle": {
+          "description": "puzzle id",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

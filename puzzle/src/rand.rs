@@ -40,10 +40,6 @@ impl Prng {
 
         bytes
     }
-
-    pub fn next_u64(&mut self) -> u64 {
-        self.rng.next_u64()
-    }
 }
 
 pub fn extend_entropy(height: u64, time: u64, sender: &HumanAddr, entropy: &[u8]) -> Vec<u8> {

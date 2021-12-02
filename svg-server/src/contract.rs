@@ -1996,7 +1996,7 @@ fn try_process_dep_list<S: Storage, A: Api, Q: Querier>(
 /// * `weights` - weight table
 fn draw_variant(prng: &mut Prng, weights: &[u16]) -> u8 {
     let total_weight: u16 = weights.iter().sum();
-    let rdm = u64::from_be_bytes(prng.eight_bytes());
+    let rdm = prng.next_u64();
     let winning_num: u16 = (rdm % total_weight as u64) as u16;
     let mut tally = 0u16;
     let mut winner = 0u8;

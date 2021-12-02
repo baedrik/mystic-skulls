@@ -1,0 +1,218 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HandleMsg",
+  "description": "Handle messages",
+  "anyOf": [
+    {
+      "description": "attempt to solve a puzzle",
+      "type": "object",
+      "required": [
+        "solve"
+      ],
+      "properties": {
+        "solve": {
+          "type": "object",
+          "required": [
+            "solution"
+          ],
+          "properties": {
+            "solution": {
+              "description": "proposed solution",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Keyphrase"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "add keyphrases",
+      "type": "object",
+      "required": [
+        "add_keyphrases"
+      ],
+      "properties": {
+        "add_keyphrases": {
+          "type": "object",
+          "required": [
+            "keyphrases"
+          ],
+          "properties": {
+            "keyphrases": {
+              "description": "list of keyphrases to add",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Keyphrase"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "remove keyphrases (only really needed if input was erroneous)",
+      "type": "object",
+      "required": [
+        "remove_keyphrases"
+      ],
+      "properties": {
+        "remove_keyphrases": {
+          "type": "object",
+          "required": [
+            "keyphrases"
+          ],
+          "properties": {
+            "keyphrases": {
+              "description": "list of puzzle IDs of the keyphrases to remove",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Create a viewing key",
+      "type": "object",
+      "required": [
+        "create_viewing_key"
+      ],
+      "properties": {
+        "create_viewing_key": {
+          "type": "object",
+          "required": [
+            "entropy"
+          ],
+          "properties": {
+            "entropy": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Set a viewing key",
+      "type": "object",
+      "required": [
+        "set_viewing_key"
+      ],
+      "properties": {
+        "set_viewing_key": {
+          "type": "object",
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "padding": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "allows an admin to add more admins",
+      "type": "object",
+      "required": [
+        "add_admins"
+      ],
+      "properties": {
+        "add_admins": {
+          "type": "object",
+          "required": [
+            "admins"
+          ],
+          "properties": {
+            "admins": {
+              "description": "list of address to grant admin priveleges",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "allows an admin to remove admin addresses",
+      "type": "object",
+      "required": [
+        "remove_admins"
+      ],
+      "properties": {
+        "remove_admins": {
+          "type": "object",
+          "required": [
+            "admins"
+          ],
+          "properties": {
+            "admins": {
+              "description": "list of address to revoke admin priveleges from",
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/HumanAddr"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "disallow the use of a permit",
+      "type": "object",
+      "required": [
+        "revoke_permit"
+      ],
+      "properties": {
+        "revoke_permit": {
+          "type": "object",
+          "required": [
+            "permit_name"
+          ],
+          "properties": {
+            "permit_name": {
+              "description": "name of the permit that is no longer valid",
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "HumanAddr": {
+      "type": "string"
+    },
+    "Keyphrase": {
+      "description": "keyphrase and puzzle id",
+      "type": "object",
+      "required": [
+        "keyphrase",
+        "puzzle"
+      ],
+      "properties": {
+        "keyphrase": {
+          "description": "sanitized keyphrase",
+          "type": "string"
+        },
+        "puzzle": {
+          "description": "puzzle id",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
