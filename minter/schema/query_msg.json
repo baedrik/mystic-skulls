@@ -88,6 +88,18 @@
       }
     },
     {
+      "description": "unauthenticated query for the number of skulls minted",
+      "type": "object",
+      "required": [
+        "num_minted"
+      ],
+      "properties": {
+        "num_minted": {
+          "type": "object"
+        }
+      }
+    },
+    {
       "description": "display the nft contract information",
       "type": "object",
       "required": [

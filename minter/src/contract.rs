@@ -493,6 +493,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
         QueryMsg::Admins { viewer, permit } => query_admins(deps, viewer, permit),
         QueryMsg::MintCounts { viewer, permit } => query_counts(deps, viewer, permit),
         QueryMsg::NftContract {} => query_nft_contract(deps),
+        QueryMsg::NumMinted {} => query_num_minted(&deps.storage),
         QueryMsg::SvgServer { viewer, permit } => query_server(deps, viewer, permit),
         QueryMsg::MultiSig { viewer, permit } => query_multi_sig(deps, viewer, permit),
     };
@@ -581,6 +582,18 @@ fn query_status<S: ReadonlyStorage>(storage: &S) -> QueryResult {
     let config: Config = load(storage, CONFIG_KEY)?;
     to_binary(&QueryAnswer::MintStatus {
         minting_has_halted: config.halt,
+    })
+}
+
+/// Returns QueryResult displaying the total mint count
+///
+/// # Arguments
+///
+/// * `storage` - reference to the contract's storage
+fn query_num_minted<S: ReadonlyStorage>(storage: &S) -> QueryResult {
+    let config: Config = load(storage, CONFIG_KEY)?;
+    to_binary(&QueryAnswer::NumMinted {
+        minted: config.mint_cnt,
     })
 }
 

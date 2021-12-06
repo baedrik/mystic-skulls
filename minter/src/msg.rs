@@ -119,6 +119,8 @@ pub enum QueryMsg {
         /// are provided, the viewer will be ignored
         permit: Option<Permit>,
     },
+    /// unauthenticated query for the number of skulls minted
+    NumMinted {},
     /// display the nft contract information
     NftContract {},
     /// display the svg server contract information
@@ -160,6 +162,8 @@ pub enum QueryAnswer {
         /// mint counts broken down by background variant
         by_background: Vec<BackgroundCount>,
     },
+    /// unauthenticated query for the number of skulls minted
+    NumMinted { minted: u16 },
     /// displays the nft contract information
     NftContract { nft_contract: ContractInfo },
     /// displays the svg server information
