@@ -937,7 +937,7 @@ mod tests {
         let pub1plus = Metadata {
             token_uri: None,
             extension: Some(Extension {
-                name: Some("Mystic Skulls #1".to_string()),
+                name: Some("Mystic Skulls #0".to_string()),
                 description: Some("PubDesc1".to_string()),
                 image: Some("PubUri1".to_string()),
                 ..Extension::default()
@@ -2690,7 +2690,7 @@ mod tests {
         let pub1plus = Metadata {
             token_uri: None,
             extension: Some(Extension {
-                name: Some("Mystic Skulls #1".to_string()),
+                name: Some("Mystic Skulls #0".to_string()),
                 ..Extension::default()
             }),
         };
@@ -2811,7 +2811,7 @@ mod tests {
         let pub1plus = Metadata {
             token_uri: None,
             extension: Some(Extension {
-                name: Some("Mystic Skulls #1".to_string()),
+                name: Some("Mystic Skulls #0".to_string()),
                 description: Some("PubDesc1".to_string()),
                 image: Some("PubUri1".to_string()),
                 ..Extension::default()
@@ -2865,7 +2865,7 @@ mod tests {
         let pub1plus = Metadata {
             token_uri: None,
             extension: Some(Extension {
-                name: Some("Mystic Skulls #2".to_string()),
+                name: Some("Mystic Skulls #1".to_string()),
                 ..Extension::default()
             }),
         };

@@ -3823,6 +3823,7 @@ pub struct AlterAuthTable {
     pub has_update: bool,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for AlterAuthTable {
     fn default() -> Self {
         AlterAuthTable {
@@ -3845,6 +3846,7 @@ pub struct AlterPermTable {
     pub has_update: bool,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for AlterPermTable {
     fn default() -> Self {
         AlterPermTable {
@@ -4778,7 +4780,7 @@ fn mint_list<S: Storage, A: Api, Q: Querier>(
             extension: None,
         });
         let mut xten = pub_meta.extension.unwrap_or_default();
-        xten.name = Some(format!("Mystic Skulls #{}", config.mint_cnt + 1));
+        xten.name = Some(format!("Mystic Skulls #{}", config.mint_cnt));
         pub_meta.extension = Some(xten);
         // make sure there is only the extension now that we added the name to it
         pub_meta.token_uri = None;

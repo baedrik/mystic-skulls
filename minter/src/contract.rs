@@ -138,7 +138,8 @@ fn try_mint<S: Storage, A: Api, Q: Querier>(
     }
     // limited to 20 mints
     let qty = backgrounds.len();
-    if qty > 20 {
+    // TODO change this
+    if qty > 10000 {
         return Err(StdError::generic_err(
             "Only 20 Mystic Skulls may be minted at once",
         ));

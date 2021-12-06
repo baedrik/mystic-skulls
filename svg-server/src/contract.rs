@@ -1386,6 +1386,10 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, &deps.storage);
     let mut trait_cnt = 0u8;
     let mut revealed = 0u8;
+    // get the hair category index
+    let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
+    let hair_idx: u8 = may_load(&cat_map, "Hair".as_bytes())?
+        .ok_or_else(|| StdError::generic_err("Hair layer category not found"))?;
 
     for (cat_idx, var_idx) in image.iter().enumerate() {
         let cat_key = (cat_idx as u8).to_le_bytes();
@@ -1393,20 +1397,41 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
             .ok_or_else(|| StdError::generic_err("Category storage is corrupt"))?;
         let disp_trait = !roll.skip.contains(&(cat_idx as u8));
         // 255 means not revealed
-        if *var_idx != 255 {
+        if *var_idx != 255 || cat_idx == hair_idx as usize {
+            let (mod_var_idx, is_unknown) = if *var_idx == 255 {
+                // if this is unknown Hair
+                let var_map = ReadonlyPrefixedStorage::multilevel(
+                    &[PREFIX_VARIANT_MAP, &cat_key],
+                    &deps.storage,
+                );
+                (
+                    may_load(&var_map, "None".as_bytes())?.ok_or_else(|| {
+                        StdError::generic_err("Missing None variant of Hair Category")
+                    })?,
+                    true,
+                )
+            // otherwise it is just a revealed trait
+            } else {
+                revealed += 1;
+                (*var_idx, false)
+            };
             let var_store =
                 ReadonlyPrefixedStorage::multilevel(&[PREFIX_VARIANT, &cat_key], &deps.storage);
-            let var: Variant = may_load(&var_store, &var_idx.to_le_bytes())?
+            let var: Variant = may_load(&var_store, &mod_var_idx.to_le_bytes())?
                 .ok_or_else(|| StdError::generic_err("Variant storage is corrupt"))?;
             image_data.push_str(&var.svg.unwrap_or_default());
+            let value = if is_unknown {
+                "???".to_string()
+            } else {
+                var.display
+            };
             if disp_trait {
                 attributes.push(Trait {
                     display_type: None,
                     trait_type: Some(cat.name),
-                    value: var.display,
+                    value,
                     max_value: None,
                 });
-                revealed += 1;
                 trait_cnt += 1;
             }
         } else if disp_trait {
@@ -1422,7 +1447,7 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
     let hidden = trait_cnt - revealed;
     attributes.push(Trait {
         display_type: None,
-        trait_type: Some("Hidden Traits".to_string()),
+        trait_type: Some("Unrevealed Trait Categories".to_string()),
         value: format!("{}", hidden),
         max_value: None,
     });
