@@ -106,6 +106,11 @@ pub enum QueryMsg {
         /// are provided, the viewer will be ignored
         permit: Option<Permit>,
     },
+    /// displays if the input answer is correct for a puzzle that has already been solved
+    Verify {
+        ///proposed solution
+        solution: Keyphrase,
+    },
 }
 
 /// responses to queries
@@ -126,6 +131,11 @@ pub enum QueryAnswer {
     Winners {
         /// winners list
         winners: Vec<Winner>,
+    },
+    /// displays if the input answer is correct for a puzzle that has already been solved
+    Verify {
+        ///correctness check
+        grade: SolveResponse,
     },
 }
 
@@ -199,4 +209,5 @@ pub enum SolveResponse {
     Winner,
     WrongAnswer,
     AlreadySolved,
+    Correct,
 }

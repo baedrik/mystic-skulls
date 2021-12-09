@@ -86,6 +86,31 @@
           }
         }
       }
+    },
+    {
+      "description": "displays if the input answer is correct for a puzzle that has already been solved",
+      "type": "object",
+      "required": [
+        "verify"
+      ],
+      "properties": {
+        "verify": {
+          "type": "object",
+          "required": [
+            "solution"
+          ],
+          "properties": {
+            "solution": {
+              "description": "proposed solution",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Keyphrase"
+                }
+              ]
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
@@ -95,6 +120,24 @@
     },
     "HumanAddr": {
       "type": "string"
+    },
+    "Keyphrase": {
+      "description": "keyphrase and puzzle id",
+      "type": "object",
+      "required": [
+        "keyphrase",
+        "puzzle"
+      ],
+      "properties": {
+        "keyphrase": {
+          "description": "sanitized keyphrase",
+          "type": "string"
+        },
+        "puzzle": {
+          "description": "puzzle id",
+          "type": "string"
+        }
+      }
     },
     "Permission": {
       "type": "string",

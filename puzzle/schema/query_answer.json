@@ -74,6 +74,31 @@
           }
         }
       }
+    },
+    {
+      "description": "displays if the input answer is correct for a puzzle that has already been solved",
+      "type": "object",
+      "required": [
+        "verify"
+      ],
+      "properties": {
+        "verify": {
+          "type": "object",
+          "required": [
+            "grade"
+          ],
+          "properties": {
+            "grade": {
+              "description": "correctness check",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/SolveResponse"
+                }
+              ]
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
@@ -97,6 +122,15 @@
           "type": "string"
         }
       }
+    },
+    "SolveResponse": {
+      "type": "string",
+      "enum": [
+        "winner",
+        "wrong_answer",
+        "already_solved",
+        "correct"
+      ]
     },
     "Winner": {
       "description": "puzzle winner",

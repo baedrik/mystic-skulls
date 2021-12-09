@@ -403,8 +403,41 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
         QueryMsg::Solved {} => query_solved(&deps.storage),
         QueryMsg::Admins { viewer, permit } => query_admins(deps, viewer, permit),
         QueryMsg::Winners { viewer, permit } => query_winners(deps, viewer, permit),
+        QueryMsg::Verify { solution } => query_verify(&deps.storage, &solution),
     };
     pad_query_result(response, BLOCK_SIZE)
+}
+
+/// Returns QueryResult displaying if the proposed solution is correct
+///
+/// # Arguments
+///
+/// * `storage` - reference to the contract's storage
+/// * `solution` - a reference to the proposed solution Keyphrase
+fn query_verify<S: ReadonlyStorage>(storage: &S, solution: &Keyphrase) -> QueryResult {
+    let config: Config = load(storage, CONFIG_KEY)?;
+    let grade = if let Some(wnr) = config
+        .winners
+        .iter()
+        .find(|w| w.puzzle_info.puzzle == solution.puzzle)
+    {
+        if wnr.winner.is_none() {
+            return Err(StdError::generic_err(
+                "This puzzle has not been solved yet, try to win by calling Solve!",
+            ));
+        }
+        if wnr.puzzle_info.keyphrase == sanitize_str(&solution.keyphrase) {
+            SolveResponse::Correct
+        } else {
+            SolveResponse::WrongAnswer
+        }
+    } else {
+        return Err(StdError::generic_err(format!(
+            "There is no puzzle with the name:  {}",
+            solution.puzzle
+        )));
+    };
+    to_binary(&QueryAnswer::Verify { grade })
 }
 
 /// Returns QueryResult displaying all the puzzles' infos

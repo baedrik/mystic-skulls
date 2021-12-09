@@ -137,7 +137,8 @@
       "enum": [
         "winner",
         "wrong_answer",
-        "already_solved"
+        "already_solved",
+        "correct"
       ]
     }
   }

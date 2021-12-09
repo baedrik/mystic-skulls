@@ -1412,7 +1412,9 @@ fn query_token_metadata<S: Storage, A: Api, Q: Querier>(
                 )
             // otherwise it is just a revealed trait
             } else {
-                revealed += 1;
+                if disp_trait {
+                    revealed += 1;
+                }
                 (*var_idx, false)
             };
             let var_store =
