@@ -2285,10 +2285,10 @@ fn new_gene_impl<S: ReadonlyStorage>(
                 &cat.normal_weights
             };
             // see if there is a forced variant
-            let forced = if is_cyclops {
-                cat.forced_cyclops.as_ref()
-            } else if is_jawless {
+            let forced = if cat.forced_jawless.is_some() && is_jawless {
                 cat.forced_jawless.as_ref()
+            } else if cat.forced_cyclops.is_some() && is_cyclops {
+                cat.forced_cyclops.as_ref()
             } else {
                 None
             };
