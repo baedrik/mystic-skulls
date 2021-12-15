@@ -829,9 +829,6 @@ pub enum QueryMsg {
         /// query to perform
         query: QueryWithPermit,
     },
-    /// TODO: remove this
-    /// debug to view complete image
-    Debug { token_id: String },
 }
 
 /// SNIP721 Approval

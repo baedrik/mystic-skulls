@@ -53,7 +53,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     let config = Config {
         nft_contract: msg.nft_contract.get_store(&deps.api)?,
         svg_contract: msg.svg_server.get_store(&deps.api)?,
-        halt: false,
+        halt: true,
         multi_sig: deps.api.canonical_address(&msg.multi_sig)?,
         mint_cnt: 0,
         backgd_cnts: Vec::new(),
@@ -138,8 +138,7 @@ fn try_mint<S: Storage, A: Api, Q: Querier>(
     }
     // limited to 20 mints
     let qty = backgrounds.len();
-    // TODO change this
-    if qty > 10000 {
+    if qty > 20 {
         return Err(StdError::generic_err(
             "Only 20 Mystic Skulls may be minted at once",
         ));
@@ -152,8 +151,8 @@ fn try_mint<S: Storage, A: Api, Q: Querier>(
             remain
         )));
     }
-    // can't overflow if limited to 20, 1 SCRT is just testnet price
-    let price = Uint128(1000000 * (qty as u128));
+    // can't overflow if limited to 20
+    let price = Uint128(13000000 * (qty as u128));
     if env.message.sent_funds.len() != 1
         || env.message.sent_funds[0].amount != price
         || env.message.sent_funds[0].denom != *"uscrt"
@@ -237,9 +236,6 @@ fn try_mint<S: Storage, A: Api, Q: Querier>(
         log: vec![],
         data: Some(to_binary(&HandleAnswer::Mint {
             skulls_minted: qty as u16,
-
-            // TODO remove this
-            collisions: svr_resp.new_genes.collisions,
         })?),
     })
 }

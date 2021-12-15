@@ -1009,8 +1009,8 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
     let cat_map = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY_MAP, &deps.storage);
     let eye_type_idx: u8 = may_load(&cat_map, "Eye Type".as_bytes())?
         .ok_or_else(|| StdError::generic_err("Eye Type layer category not found"))?;
-    let chin_idx: u8 = may_load(&cat_map, "Jaw".as_bytes())?
-        .ok_or_else(|| StdError::generic_err("Jaw layer category not found"))?;
+    let chin_idx: u8 = may_load(&cat_map, "Jaw Type".as_bytes())?
+        .ok_or_else(|| StdError::generic_err("Jaw Type layer category not found"))?;
     let skull_idx: u8 = may_load(&cat_map, "Skull".as_bytes())?
         .ok_or_else(|| StdError::generic_err("Skull layer category not found"))?;
     // create the gene seed
@@ -1021,8 +1021,6 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
         gene_seed[*skip_cat as usize] = none_idx;
     }
 
-    // TODO remove this
-    let mut collisions = 0u16;
     let archetype_idxs = vec![skull_idx, chin_idx, eye_type_idx];
     for back in backgrounds.into_iter() {
         let background_idx = use_back_cache(&background_map, &back, &mut back_cache)?;
@@ -1046,8 +1044,6 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
                 &gene_seed,
                 &mut uniques,
                 &archetype_idxs,
-                // TODO remove this
-                &mut collisions,
             )?;
             if !reroll {
                 genes.push(GeneInfo {
@@ -1060,10 +1056,7 @@ fn query_new_gene<S: Storage, A: Api, Q: Querier>(
         }
     }
 
-    to_binary(&QueryAnswer::NewGenes {
-        genes, // TODO remove this
-        collisions,
-    })
+    to_binary(&QueryAnswer::NewGenes { genes })
 }
 
 /// Returns QueryResult displaying the layer categories that should be skipped when rolling
@@ -2156,9 +2149,6 @@ fn new_gene_impl<S: ReadonlyStorage>(
     gene_seed: &[u8],
     uniques: &mut Vec<Vec<u8>>,
     archetype_idxs: &[u8],
-
-    // TODO remove this
-    collisions: &mut u16,
 ) -> StdResult<(bool, Vec<u8>, Vec<u8>, Vec<u8>)> {
     // define some storages
     let cat_store = ReadonlyPrefixedStorage::new(PREFIX_CATEGORY, storage);
@@ -2246,10 +2236,6 @@ fn new_gene_impl<S: ReadonlyStorage>(
             )? {
                 return Ok((false, current_image, genetic_image, unique_check));
             }
-
-            // TODO remove this
-            *collisions += 1;
-
             // if skipping everything, return to try rerolling everything
             if skipping.iter().all(|b| *b) {
                 return Ok((true, Vec::new(), Vec::new(), Vec::new()));
@@ -2328,9 +2314,6 @@ fn new_gene_impl<S: ReadonlyStorage>(
                 )? {
                     return Ok((false, current_image, genetic_image, unique_check));
                 }
-
-                // TODO remove this
-                *collisions += 1;
             }
         }
         idx += 1;

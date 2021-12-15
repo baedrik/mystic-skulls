@@ -56,9 +56,6 @@ pub struct GeneInfo {
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct NewGenes {
     pub genes: Vec<GeneInfo>,
-
-    // TODO remove this
-    pub collisions: u16,
 }
 
 /// wrapper to deserialize NewGenes responses

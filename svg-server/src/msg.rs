@@ -369,10 +369,7 @@ pub enum QueryAnswer {
         hiders: Vec<Dependencies>,
     },
     /// response from creating a new genetic images
-    NewGenes {
-        genes: Vec<GeneInfo>, // TODO remove this
-        collisions: u16,
-    },
+    NewGenes { genes: Vec<GeneInfo> },
     /// info needed by alchemy/reveal contracts
     ServeAlchemy {
         /// categories that are skipped when rolling/revealing
